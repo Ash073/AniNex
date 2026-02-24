@@ -10,18 +10,12 @@ const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const FACEBOOK_APP_ID      = process.env.FACEBOOK_APP_ID;
 const FACEBOOK_APP_SECRET  = process.env.FACEBOOK_APP_SECRET;
-const CLIENT_URL           = process.env.CLIENT_URL  || 'http://localhost:8081';
+const CLIENT_URL           = process.env.CLIENT_URL  || 'https://aninex-1.onrender.com';
 const DISCORD_CLIENT_ID    = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET= process.env.DISCORD_CLIENT_SECRET;
-const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || 'http://localhost:8081/api/auth/oauth/discord/callback';
-
-/**
- * Derive the backend's own base URL from the incoming request.
- * This way localhost works for web and 192.168.x.x works for mobile
- * without needing to hardcode BACKEND_URL.
- */
+const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || 'https://aninex-1.onrender.com/api/auth/oauth/discord/callback';
 const getBackendUrl = (req) => {
-  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
   const host  = req.get('x-forwarded-host')  || req.get('host');
   return `${proto}://${host}`;
 };
