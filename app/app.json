@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AniNex",
+    "name": "AniNeX",
     "slug": "aninex",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,7 +15,7 @@
     },
 
     "ios": {
-      "bundleIdentifier": "com.animex.app",
+      "bundleIdentifier": "com.aninex.app",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -23,7 +23,7 @@
     },
 
     "android": {
-      "package": "com.animex.app",
+      "package": "com.aninex.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo/AniNex (1).png",
         "backgroundColor": "#ffffff"
@@ -50,10 +50,10 @@
     },
 
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo/AniNex (1).png"
     },
 
-    "scheme": "animex",
+    "scheme": "aninex",
 
     "plugins": [
       "expo-router",
