@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "AniNex",
+    "slug": "aninex",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo/AniNex (1).png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+
+    "splash": {
+      "image": "./assets/logo/AniNex (1).png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "ios": {
+      "bundleIdentifier": "com.animex.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+
+    "android": {
+      "package": "com.animex.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo/AniNex (1).png",
+        "backgroundColor": "#ffffff"
+      },
+
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ],
+
+      "usesFeature": [
+        {
+          "name": "android.hardware.camera",
+          "required": false
+        },
+        {
+          "name": "android.hardware.camera.ar",
+          "required": false
+        }
+      ],
+
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+
+    "scheme": "animex",
+
+    "plugins": [
+      "expo-router",
+      "expo-web-browser",
+      "expo-font",
+      "expo-image-picker"
+    ],
+
+    "extra": {
+      "expoPublicApiUrl": "https://aninex-1.onrender.com",
+      "router": {},
+      "eas": {
+        "projectId": "fbb8db22-e484-4526-add1-fe80a4fbcdb5"
+      }
+    }
+  }
+}
