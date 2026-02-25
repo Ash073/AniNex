@@ -1,3 +1,20 @@
+// Store Expo push token for notifications
+const { supabase } = require('../config/supabase');
+const { protect } = require('../middleware/auth');
+
+// POST /api/users/push-token
+router.post('/push-token', protect, async (req, res) => {
+  const { token } = req.body;
+  const userId = req.user.id;
+  if (!token) {
+    return res.status(400).json({ success: false, message: 'Token required' });
+  }
+  const { error } = await supabase.from('users').update({ push_token: token }).eq('id', userId);
+  if (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+  res.json({ success: true });
+});
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');

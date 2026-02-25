@@ -4,6 +4,7 @@ const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
 
+const { createNotification } = require('../utils/notificationHelper');
 const router = express.Router();
 
 // @route   GET /api/messages/channel/:channelId
@@ -117,7 +118,7 @@ router.post('/', protect, [
       // Get user by username
       const { data: mentionedUser } = await supabase
         .from('users')
-        .select('id, username')
+        .select('id, username, push_token')
         .eq('username', username)
         .single();
 
@@ -128,6 +129,14 @@ router.post('/', protect, [
         });
         // Replace @username with formatted mention for frontend
         processedContent = processedContent.replace(`@${username}`, `[@${username}](user:${mentionedUser.id})`);
+        // Send notification to mentioned user
+        await createNotification(
+          mentionedUser.id,
+          'mention',
+          'You were mentioned',
+          `${req.user.username} mentioned you in a message`,
+          { channelId, by: req.user.username }
+        );
       }
     }
 
@@ -159,6 +168,25 @@ router.post('/', protect, [
     await supabase.rpc('increment_server_message_count', { sid: channel.server_id }).catch(() => {
       // Fallback: just ignore if rpc doesn't exist
     });
+
+    // Notify all server members except sender
+    const { data: members } = await supabase
+      .from('server_members')
+      .select('user_id')
+      .eq('server_id', channel.server_id);
+    if (members) {
+      for (const m of members) {
+        if (m.user_id !== req.user.id) {
+          await createNotification(
+            m.user_id,
+            'server_message',
+            'New Message',
+            `${req.user.username} sent a new message in a server you are in`,
+            { channelId, by: req.user.username }
+          );
+        }
+      }
+    }
 
     const enriched = {
       ...message,

@@ -1,4 +1,5 @@
 const { supabase } = require('../config/supabase');
+const { sendExpoPush } = require('./expoPush');
 
 // Create a notification for a user
 async function createNotification(userId, type, title, body, data = {}) {
@@ -51,6 +52,20 @@ async function createNotification(userId, type, title, body, data = {}) {
         data: data || {},
         created_at: notification.created_at
       });
+    }
+
+    // Send push notification if user has push_token
+    const { data: user } = await supabase
+      .from('users')
+      .select('push_token')
+      .eq('id', userId)
+      .single();
+    if (user && user.push_token) {
+      try {
+        await sendExpoPush(user.push_token, title, body, data);
+      } catch (err) {
+        console.error('Expo push error:', err);
+      }
     }
 
     return notification;

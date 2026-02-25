@@ -18,7 +18,7 @@ router.get('/feed', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/posts
+// @route   GET /api/post
 router.get('/', protect, async (req, res) => {
   try {
     const { serverId, category, limit = 20, skip = 0 } = req.query;
