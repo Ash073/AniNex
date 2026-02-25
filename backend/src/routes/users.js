@@ -1,4 +1,5 @@
-// Store Expo push token for notifications
+const express = require('express');
+const router = express.Router();
 const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 
@@ -15,10 +16,6 @@ router.post('/push-token', protect, async (req, res) => {
   }
   res.json({ success: true });
 });
-const express = require('express');
-const router = express.Router();
-const { supabase } = require('../config/supabase');
-const { protect } = require('../middleware/auth');
 
 // @route   GET /api/users/search
 // @desc    Search users by username or display_name
