@@ -8,17 +8,30 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
 
+    "scheme": "aninex",
+
     "splash": {
       "image": "./assets/logo/AniNex (1).png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
+    },
+
+    "updates": {
+      "url": "https://u.expo.dev/fbb8db22-e484-4526-add1-fe80a4fbcdb5"
+    },
+
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
 
     "ios": {
       "bundleIdentifier": "com.aninex.app",
       "supportsTablet": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow AniNeX to access your camera.",
+        "NSPhotoLibraryUsageDescription": "Allow AniNeX to access your photos.",
+        "NSUserTrackingUsageDescription": "Used for improving user experience."
       }
     },
 
@@ -26,12 +39,13 @@
       "package": "com.aninex.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo/AniNex (1).png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
 
       "permissions": [
         "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS"
       ],
 
       "usesFeature": [
@@ -50,16 +64,18 @@
     },
 
     "web": {
+      "bundler": "metro",
+      "output": "static",
       "favicon": "./assets/logo/AniNex (1).png"
     },
-
-    "scheme": "aninex",
 
     "plugins": [
       "expo-router",
       "expo-web-browser",
       "expo-font",
-      "expo-image-picker"
+      "expo-image-picker",
+      "expo-notifications",
+      "expo-secure-store"
     ],
 
     "extra": {

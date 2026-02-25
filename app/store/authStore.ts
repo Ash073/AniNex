@@ -82,9 +82,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   loadAuth: async () => {
-    // Minimum display time (ms) — matches the web version's 4.5 s timer so the
-    // logo animation completes at least one full cycle before the app appears.
-    const MIN_DISPLAY_MS = 4500;
+    // Minimum display time (ms) — reduced for faster loading
+    const MIN_DISPLAY_MS = 1200;
     const minTimer = new Promise<void>((resolve) =>
       setTimeout(resolve, MIN_DISPLAY_MS)
     );

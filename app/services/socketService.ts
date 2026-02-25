@@ -19,6 +19,7 @@ const getToken = async (): Promise<string | null> => {
 class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private messageQueue: Array<{ channelId: string; content: string; image_url?: string; repliedToId?: string }> = [];
 
   async connect() {
     if (this.isConnected && this.socket?.connected) return;
@@ -40,10 +41,15 @@ class SocketService {
       });
 
       this.setupEventListeners();
-      
+
       this.socket.on('connect', () => {
         console.log('Socket connected');
         this.isConnected = true;
+        // Flush queued messages
+        while (this.messageQueue.length > 0) {
+          const msg = this.messageQueue.shift();
+          this.socket.emit('message:send', msg);
+        }
       });
 
       this.socket.on('disconnect', () => {
@@ -89,8 +95,12 @@ class SocketService {
 
   // Message operations
   sendMessage(channelId: string, content: string, image_url?: string, repliedToId?: string) {
+    const msg = { channelId, content, image_url, repliedToId };
     if (this.socket && this.isConnected) {
-      this.socket.emit('message:send', { channelId, content, image_url, repliedToId });
+      this.socket.emit('message:send', msg);
+    } else {
+      // Queue the message for retry
+      this.messageQueue.push(msg);
     }
   }
 
