@@ -26,7 +26,7 @@ router.get('/', protect, async (req, res) => {
     let query = supabase
       .from('posts')
       .select('*', { count: 'exact' })
-      .eq('is_public', true)
+      .or('is_public.eq.true,is_public.is.null')
       .order('created_at', { ascending: false })
       .range(parseInt(skip), parseInt(skip) + parseInt(limit) - 1);
 
@@ -129,10 +129,11 @@ router.post('/', protect, [
   body('visibility').optional().isIn(['public', 'followers', 'selected']),
   body('allowedUsers').optional().isArray(),
   body('commentsEnabled').optional().isBoolean(),
+  body('mentions').optional().isArray(),
   validate
 ], async (req, res) => {
   try {
-    const { content, title, category, serverId, tags, images, visibility, allowedUsers, commentsEnabled } = req.body;
+    const { content, title, category, serverId, tags, images, visibility, allowedUsers, commentsEnabled, mentions } = req.body;
 
     // Prepare post data
     const postData = {
@@ -144,7 +145,10 @@ router.post('/', protect, [
       tags: tags || [],
       images: images || [],
       visibility: visibility || 'public',
-      allowed_users: allowedUsers || []
+      is_public: (visibility || 'public') === 'public',
+      allowed_users: allowedUsers || [],
+      comments_enabled: commentsEnabled !== false,
+      mentions: mentions || [],
     };
 
     const { data: post, error } = await supabase
@@ -162,6 +166,31 @@ router.post('/', protect, [
       author: { id: req.user.id, username: req.user.username, avatar: req.user.avatar },
       server: null
     };
+
+    // Send notifications to mentioned users
+    if (mentions && mentions.length > 0) {
+      try {
+        const { createNotification } = require('../utils/notificationHelper');
+        for (const mentionedUserId of mentions) {
+          if (mentionedUserId !== req.user.id) {
+            await createNotification(
+              mentionedUserId,
+              'mention',
+              'You were mentioned in a post',
+              `${req.user.username} mentioned you in their post${title ? `: "${title}"` : ''}`,
+              {
+                postId: post.id,
+                authorId: req.user.id,
+                authorUsername: req.user.username,
+              }
+            ).catch(() => { });
+          }
+        }
+      } catch (notifErr) {
+        // Notifications are best-effort
+        console.warn('Failed to send mention notifications:', notifErr.message);
+      }
+    }
 
     res.status(201).json({ success: true, data: { post: enriched } });
   } catch (error) {

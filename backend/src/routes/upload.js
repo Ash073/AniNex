@@ -64,6 +64,7 @@ router.post('/', protect, upload.single('image'), async (req, res) => {
       .upload(filename, req.file.buffer, {
         contentType: req.file.mimetype,
         upsert: false,
+        cacheControl: '3600',
       });
 
     if (error) {

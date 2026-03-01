@@ -1,5 +1,6 @@
 const { verifyToken } = require('../config/jwt');
 const { supabase } = require('../config/supabase');
+const { sendExpoPush } = require('../utils/expoPush');
 
 const setupSocketHandlers = (io) => {
   // Authentication middleware
@@ -146,6 +147,26 @@ const setupSocketHandlers = (io) => {
           conversationId,
           message: populatedMessage,
         });
+
+        // Send push notification to recipient
+        try {
+          const { data: otherUser } = await supabase
+            .from('users')
+            .select('push_token')
+            .eq('id', otherId)
+            .single();
+          if (otherUser && otherUser.push_token) {
+            const pushBody = image_url ? '📷 Sent an image' : (content || 'New message').substring(0, 100);
+            sendExpoPush(otherUser.push_token, socket.user.username, pushBody, {
+              type: 'dm',
+              conversationId,
+              senderName: socket.user.username,
+              senderAvatar: socket.user.avatar,
+            }).catch(err => console.error('DM push error:', err));
+          }
+        } catch (pushErr) {
+          // Push is best-effort, don't fail the message
+        }
       } catch (error) {
         console.error('DM send error:', error);
         socket.emit('dm:error', { message: 'Failed to send DM' });
@@ -244,7 +265,7 @@ const setupSocketHandlers = (io) => {
         // Parse mentions from content
         let processedContent = content;
         const mentions = [];
-        
+
         // Extract @mentions from content
         const mentionRegex = /@(\w+)/g;
         let match;
@@ -256,7 +277,7 @@ const setupSocketHandlers = (io) => {
             .select('id, username')
             .eq('username', username)
             .single();
-          
+
           if (mentionedUser && mentionedUser.id !== socket.userId) {
             mentions.push({
               user_id: mentionedUser.id,
@@ -302,6 +323,39 @@ const setupSocketHandlers = (io) => {
 
         // Broadcast to channel
         io.to(`channel:${channelId}`).emit('message:new', populatedMessage);
+
+        // Send push notifications to other server members
+        try {
+          const { data: members } = await supabase
+            .from('server_members')
+            .select('user_id')
+            .eq('server_id', channel.server_id)
+            .neq('user_id', socket.userId);
+
+          if (members && members.length > 0) {
+            const memberIds = members.map(m => m.user_id);
+            const { data: users } = await supabase
+              .from('users')
+              .select('id, push_token')
+              .in('id', memberIds)
+              .not('push_token', 'is', null);
+
+            if (users) {
+              const pushBody = image_url ? '📷 Image' : (content || 'New message').substring(0, 100);
+              for (const u of users) {
+                if (u.push_token) {
+                  sendExpoPush(u.push_token, `${socket.user.username} in server`, pushBody, {
+                    type: 'server_message',
+                    channelId,
+                    serverId: channel.server_id,
+                  }).catch(() => { });
+                }
+              }
+            }
+          }
+        } catch (pushErr) {
+          // Push is best-effort
+        }
       } catch (error) {
         console.error('Message send error:', error);
         socket.emit('message:error', { message: 'Failed to send message' });

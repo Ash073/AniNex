@@ -44,6 +44,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Make io accessible to routes
 app.set('io', io);
+// Also set global.io so notificationHelper can emit real-time events
+global.io = io;
 
 // Routes
 app.use('/api/auth', require('./src/routes/auth'));
