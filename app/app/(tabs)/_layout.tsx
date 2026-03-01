@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tabs, Redirect, usePathname, router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useSocket } from '@/hooks/useSocket';
@@ -19,9 +19,11 @@ export default function TabsLayout() {
 
   // Update notes modal visibility
   const [showUpdateNotes, setShowUpdateNotes] = useState(false);
+  const hasCheckedUpdateNotes = useRef(false);
 
   useEffect(() => {
-    if (isAuthenticated && user?.onboardingCompleted) {
+    if (isAuthenticated && user?.onboardingCompleted && !hasCheckedUpdateNotes.current) {
+      hasCheckedUpdateNotes.current = true;
       // Check if we should show the update notes
       shouldShowUpdateNotes().then((shouldShow) => {
         if (shouldShow) {

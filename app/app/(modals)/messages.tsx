@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dmService } from '@/services/dmService';
 import { friendService } from '@/services/friendService';
@@ -77,6 +77,7 @@ function timeAgo(dateStr?: string) {
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const userId = user?.id || (user as any)?._id;
   const [activeTab, setActiveTab] = useState<'messages' | 'servers'>('messages');
   const [refreshing, setRefreshing] = useState(false);
@@ -226,7 +227,10 @@ export default function MessagesScreen() {
         setTimeout(() => refetchConvos(), 500);
       }
       // Mark all messages as read in backend
-      dmService.markRead(item.id).catch(() => {});
+      dmService.markRead(item.id).then(() => {
+        // Clear global unread count
+        queryClient.invalidateQueries({ queryKey: ['dm-unread-count'] });
+      }).catch(() => { });
       router.push({
         pathname: '/(modals)/dm/[conversationId]',
         params: {

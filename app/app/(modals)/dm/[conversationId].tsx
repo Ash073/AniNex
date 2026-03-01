@@ -16,6 +16,7 @@ import {
   Animated,
   Image,
 } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { BlurView } from 'expo-blur';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -161,6 +162,7 @@ export default function DMChatScreen() {
   const { conversationId, name, avatar, recipientId } = useLocalSearchParams<{ conversationId: string; name?: string; avatar?: string; recipientId?: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const currentUserId = user?.id || (user as any)?._id;
 
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
@@ -206,13 +208,20 @@ export default function DMChatScreen() {
 
     loadRecipientStatus();
     loadData();
+    // Mark as read when entering
+    dmService.markRead(conversationId).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['dm-unread-count'] });
+    }).catch(() => { });
+
     socketService.connect();
     socketService.joinDM(conversationId);
 
     const onNewMessage = (message: DirectMessage) => {
       if (message.conversation_id === conversationId) {
         setMessages((prev) => [message, ...prev]); // Prepend for inverted list
-        dmService.markRead(conversationId).catch(() => { });
+        dmService.markRead(conversationId).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['dm-unread-count'] });
+        }).catch(() => { });
 
         // Update status if sender is the other user
         if (message.sender_id !== currentUserId && message.sender) {
