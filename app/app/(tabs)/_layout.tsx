@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import { Tabs, Redirect, usePathname, router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useSocket } from '@/hooks/useSocket';
 import { View, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import FloatingNavBar from '@/components/FloatingNavBar';
+import UpdateNotesModal, { shouldShowUpdateNotes } from '@/components/UpdateNotesModal';
 
 // Opaque dark background for each tab scene – prevents overlap
 const SCENE_BG = '#0a0a14';
@@ -14,6 +16,21 @@ export default function TabsLayout() {
 
   // Initialize socket connection
   useSocket();
+
+  // Update notes modal visibility
+  const [showUpdateNotes, setShowUpdateNotes] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.onboardingCompleted) {
+      // Check if we should show the update notes
+      shouldShowUpdateNotes().then((shouldShow) => {
+        if (shouldShow) {
+          // Small delay so the app loads smoothly first
+          setTimeout(() => setShowUpdateNotes(true), 800);
+        }
+      });
+    }
+  }, [isAuthenticated, user?.onboardingCompleted]);
 
   if (isLoading) return null;
 
@@ -60,6 +77,13 @@ export default function TabsLayout() {
 
       {/* Custom floating nav */}
       <FloatingNavBar activeTab={activeTab} onTabPress={handleTabPress} />
+
+      {/* Update notes modal – auto-shown once after this version is deployed */}
+      <UpdateNotesModal
+        visible={showUpdateNotes}
+        onClose={() => setShowUpdateNotes(false)}
+        permanent={true}
+      />
     </View>
   );
 }

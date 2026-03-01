@@ -27,6 +27,7 @@ import FriendsBottomSheet from '@/components/FriendsBottomSheet';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Post } from '@/types';
+import UpdateNotesModal, { CURRENT_VERSION } from '@/components/UpdateNotesModal';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_GAP = 2;
@@ -99,6 +100,7 @@ export default function ProfileScreen() {
   const [showInterests, setShowInterests] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [showFriendsSheet, setShowFriendsSheet] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   // Fetch user's posts
   const userId = user?.id || user?._id || '';
@@ -196,257 +198,274 @@ export default function ProfileScreen() {
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120, paddingTop: insets.top + 12 }}
           showsVerticalScrollIndicator={false}
         >
-        {/* Title row */}
-        <View style={s.headerRow}>
-          <Text style={s.pageTitle}>Profile</Text>
-          <TouchableOpacity onPress={handleLogout} activeOpacity={0.7} style={s.logoutBtn}>
-            <Ionicons name="log-out-outline" size={20} color="#ec4899" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Avatar + info card */}
-        <View style={s.card}>
-          <View style={{ alignItems: 'center', marginBottom: 16 }}>
-            {avatarSrc && !avatarError ? (
-              <Image 
-                source={avatarSrc} 
-                style={s.bigAvatar} 
-                onError={() => setAvatarError(true)}
-                resizeMode="cover"
-                fadeDuration={0} // Disable fade animation on Android
-              />
-            ) : (
-              <View style={[s.bigAvatar, { backgroundColor: 'rgba(99,102,241,0.25)', alignItems: 'center', justifyContent: 'center' }]}>
-                <Ionicons name="person" size={40} color="rgba(99,102,241,0.6)" />
-              </View>
-            )}
-            <Text style={s.username}>{user.displayName || user.username}</Text>
-            {user.username && <Text style={s.email}>@{user.username}</Text>}
-            {user.bio ? <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 20 }} numberOfLines={2}>{user.bio}</Text> : null}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
-              <View
-                style={[
-                  s.statusDot,
-                  { backgroundColor: user.isOnline ? '#22c55e' : '#6b7280' },
-                ]}
-              />
-              <Text style={s.muted}>{user.isOnline ? 'Online' : 'Offline'}</Text>
-            </View>
-          </View>
-
-          {/* Stats row */}
-          <View style={s.statsRow}>
-            <View style={s.stat}>
-              <Text style={s.statNum}>{user.servers?.length ?? 0}</Text>
-              <Text style={s.statLabel}>Servers</Text>
-            </View>
-            <TouchableOpacity
-              style={s.stat}
-              activeOpacity={0.7}
-              onPress={() => setShowFriendsSheet(true)}
-            >
-              <Text style={s.statNum}>{user.friends?.length ?? 0}</Text>
-              <Text style={s.statLabel}>Friends</Text>
-            </TouchableOpacity>
-            <View style={s.stat}>
-              <Text style={[s.statNum, { textTransform: 'capitalize' }]}>{user.experienceLevel}</Text>
-              <Text style={s.statLabel}>Level</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Interests toggle button ── */}
-        {hasAnyInterests && (
-          <TouchableOpacity
-            style={s.interestsToggle}
-            activeOpacity={0.7}
-            onPress={toggleInterests}
-          >
-            <View style={s.interestsToggleLeft}>
-              <View style={s.interestsIcon}>
-                <Ionicons name="heart-circle" size={22} color="#818cf8" />
-              </View>
-              <Text style={s.interestsToggleText}>Interests & Favorites</Text>
-            </View>
-            <Ionicons
-              name={showInterests ? 'chevron-up' : 'chevron-down'}
-              size={20}
-              color="rgba(255,255,255,0.35)"
-            />
-          </TouchableOpacity>
-        )}
-
-        {/* ── Expanded interests panel ── */}
-        {showInterests && hasAnyInterests && (
-          <View style={s.interestsPanel}>
-            {/* Favorite Anime */}
-            {user.favoriteAnime?.length > 0 && (
-              <View style={s.interestSection}>
-                <View style={s.interestSectionHeader}>
-                  <Ionicons name="tv-outline" size={16} color="#818cf8" />
-                  <Text style={s.interestSectionTitle}>Favorite Anime</Text>
-                </View>
-                <View style={s.chipRow}>
-                  {user.favoriteAnime.map((anime) => (
-                    <View key={anime} style={s.chipPrimary}>
-                      <Text style={s.chipPrimaryText}>{anime}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Genres */}
-            {user.genres?.length > 0 && (
-              <View style={s.interestSection}>
-                <View style={s.interestSectionHeader}>
-                  <Ionicons name="musical-notes-outline" size={16} color="#f472b6" />
-                  <Text style={[s.interestSectionTitle, { color: '#f472b6' }]}>Genres</Text>
-                </View>
-                <View style={s.chipRow}>
-                  {user.genres.map((genre) => (
-                    <View key={genre} style={s.chipAccent}>
-                      <Text style={s.chipAccentText}>{genre}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Interests */}
-            {user.interests?.length > 0 && (
-              <View style={s.interestSection}>
-                <View style={s.interestSectionHeader}>
-                  <Ionicons name="sparkles-outline" size={16} color="rgba(255,255,255,0.55)" />
-                  <Text style={s.interestSectionTitle}>Interests</Text>
-                </View>
-                <View style={s.chipRow}>
-                  {user.interests.map((interest) => (
-                    <View key={interest} style={s.chipMuted}>
-                      <Text style={s.chipMutedText}>{interest}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Edit / Update button */}
-            <TouchableOpacity style={s.editInterestsBtn} activeOpacity={0.7} onPress={() => router.push('/(modals)/edit-profile' as any)}>
-              <Ionicons name="pencil-outline" size={16} color="#818cf8" />
-              <Text style={s.editInterestsBtnText}>Edit Interests</Text>
+          {/* Title row */}
+          <View style={s.headerRow}>
+            <Text style={s.pageTitle}>Profile</Text>
+            <TouchableOpacity onPress={handleLogout} activeOpacity={0.7} style={s.logoutBtn}>
+              <Ionicons name="log-out-outline" size={20} color="#ec4899" />
             </TouchableOpacity>
           </View>
-        )}
 
-        {/* ── Edit Profile button (always visible, below interests) ── */}
-        <TouchableOpacity
-          style={s.editProfileBtn}
-          activeOpacity={0.7}
-          onPress={() => router.push('/(modals)/edit-profile' as any)}
-        >
-          <Ionicons name="create-outline" size={18} color="#fff" />
-          <Text style={s.editProfileBtnText}>Edit Profile</Text>
-        </TouchableOpacity>
-
-        {/* ── My Posts Grid ── */}
-        <View style={{ marginBottom: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="grid" size={18} color="#818cf8" />
-              <Text style={s.sectionTitle}>My Posts</Text>
+          {/* Avatar + info card */}
+          <View style={s.card}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              {avatarSrc && !avatarError ? (
+                <Image
+                  source={avatarSrc}
+                  style={s.bigAvatar}
+                  onError={() => setAvatarError(true)}
+                  resizeMode="cover"
+                  fadeDuration={0} // Disable fade animation on Android
+                />
+              ) : (
+                <View style={[s.bigAvatar, { backgroundColor: 'rgba(99,102,241,0.25)', alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="person" size={40} color="rgba(99,102,241,0.6)" />
+                </View>
+              )}
+              <Text style={s.username}>{user.displayName || user.username}</Text>
+              {user.username && <Text style={s.email}>@{user.username}</Text>}
+              {user.bio ? <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 20 }} numberOfLines={2}>{user.bio}</Text> : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <View
+                  style={[
+                    s.statusDot,
+                    { backgroundColor: user.isOnline ? '#22c55e' : '#6b7280' },
+                  ]}
+                />
+                <Text style={s.muted}>{user.isOnline ? 'Online' : 'Offline'}</Text>
+              </View>
             </View>
-            <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, fontWeight: '600' }}>
-              {myPosts.length} {myPosts.length === 1 ? 'post' : 'posts'}
-            </Text>
-          </View>
 
-          {myPosts.length === 0 ? (
-            <View style={[s.card, { alignItems: 'center', paddingVertical: 32 }]}>
-              <Ionicons name="document-text-outline" size={40} color="rgba(255,255,255,0.12)" />
-              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600', marginTop: 10 }}>No posts yet</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12, marginTop: 4 }}>Share your first post with the community!</Text>
+            {/* Stats row */}
+            <View style={s.statsRow}>
+              <View style={s.stat}>
+                <Text style={s.statNum}>{user.servers?.length ?? 0}</Text>
+                <Text style={s.statLabel}>Servers</Text>
+              </View>
               <TouchableOpacity
-                style={{ marginTop: 14, backgroundColor: '#6366f1', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                onPress={() => router.push('/(modals)/create-post')}
+                style={s.stat}
                 activeOpacity={0.7}
+                onPress={() => setShowFriendsSheet(true)}
               >
-                <Ionicons name="add" size={18} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Create Post</Text>
+                <Text style={s.statNum}>{user.friends?.length ?? 0}</Text>
+                <Text style={s.statLabel}>Friends</Text>
+              </TouchableOpacity>
+              <View style={s.stat}>
+                <Text style={[s.statNum, { textTransform: 'capitalize' }]}>{user.experienceLevel}</Text>
+                <Text style={s.statLabel}>Level</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ── Interests toggle button ── */}
+          {hasAnyInterests && (
+            <TouchableOpacity
+              style={s.interestsToggle}
+              activeOpacity={0.7}
+              onPress={toggleInterests}
+            >
+              <View style={s.interestsToggleLeft}>
+                <View style={s.interestsIcon}>
+                  <Ionicons name="heart-circle" size={22} color="#818cf8" />
+                </View>
+                <Text style={s.interestsToggleText}>Interests & Favorites</Text>
+              </View>
+              <Ionicons
+                name={showInterests ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color="rgba(255,255,255,0.35)"
+              />
+            </TouchableOpacity>
+          )}
+
+          {/* ── Expanded interests panel ── */}
+          {showInterests && hasAnyInterests && (
+            <View style={s.interestsPanel}>
+              {/* Favorite Anime */}
+              {user.favoriteAnime?.length > 0 && (
+                <View style={s.interestSection}>
+                  <View style={s.interestSectionHeader}>
+                    <Ionicons name="tv-outline" size={16} color="#818cf8" />
+                    <Text style={s.interestSectionTitle}>Favorite Anime</Text>
+                  </View>
+                  <View style={s.chipRow}>
+                    {user.favoriteAnime.map((anime) => (
+                      <View key={anime} style={s.chipPrimary}>
+                        <Text style={s.chipPrimaryText}>{anime}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Genres */}
+              {user.genres?.length > 0 && (
+                <View style={s.interestSection}>
+                  <View style={s.interestSectionHeader}>
+                    <Ionicons name="musical-notes-outline" size={16} color="#f472b6" />
+                    <Text style={[s.interestSectionTitle, { color: '#f472b6' }]}>Genres</Text>
+                  </View>
+                  <View style={s.chipRow}>
+                    {user.genres.map((genre) => (
+                      <View key={genre} style={s.chipAccent}>
+                        <Text style={s.chipAccentText}>{genre}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Interests */}
+              {user.interests?.length > 0 && (
+                <View style={s.interestSection}>
+                  <View style={s.interestSectionHeader}>
+                    <Ionicons name="sparkles-outline" size={16} color="rgba(255,255,255,0.55)" />
+                    <Text style={s.interestSectionTitle}>Interests</Text>
+                  </View>
+                  <View style={s.chipRow}>
+                    {user.interests.map((interest) => (
+                      <View key={interest} style={s.chipMuted}>
+                        <Text style={s.chipMutedText}>{interest}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Edit / Update button */}
+              <TouchableOpacity style={s.editInterestsBtn} activeOpacity={0.7} onPress={() => router.push('/(modals)/edit-profile' as any)}>
+                <Ionicons name="pencil-outline" size={16} color="#818cf8" />
+                <Text style={s.editInterestsBtnText}>Edit Interests</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <View style={s.gridContainer}>
-              {myPosts.map((post: Post, index: number) => {
-                const hasImage = (post.images?.length ?? 0) > 0;
-                return (
-                  <TouchableOpacity
-                    key={post.id || post._id}
-                    style={s.gridTile}
-                    activeOpacity={0.8}
-                    onPress={() => router.push(`/(modals)/post-viewer?userId=${userId}&startIndex=${index}` as any)}
-                  >
-                    {hasImage ? (
-                      <Image
-                        source={{ uri: post.images[0] }}
-                        style={s.gridImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={s.gridTextTile}>
-                        <Text style={s.gridTextContent} numberOfLines={4}>
-                          {post.title || post.content}
-                        </Text>
-                      </View>
-                    )}
-                    {/* Overlay with stats */}
-                    <View style={s.gridOverlay}>
-                      <View style={s.gridStat}>
-                        <Ionicons name="heart" size={12} color="#fff" />
-                        <Text style={s.gridStatText}>{post.like_count ?? post.likeCount ?? 0}</Text>
-                      </View>
-                    </View>
-                    {/* Multi-image indicator */}
-                    {(post.images?.length ?? 0) > 1 && (
-                      <View style={s.multiIndicator}>
-                        <Ionicons name="copy" size={14} color="#fff" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           )}
-        </View>
 
-        {/* Settings & Logout */}
-        <View style={s.card}>
+          {/* ── Edit Profile button (always visible, below interests) ── */}
           <TouchableOpacity
-            style={s.actionRow}
+            style={s.editProfileBtn}
             activeOpacity={0.7}
-            onPress={() => router.push('/(modals)/settings' as any)}
+            onPress={() => router.push('/(modals)/edit-profile' as any)}
           >
-            <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.6)" />
-            <Text style={s.actionLabel}>Settings</Text>
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.2)" />
+            <Ionicons name="create-outline" size={18} color="#fff" />
+            <Text style={s.editProfileBtnText}>Edit Profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.actionRow, s.actionBorder]} onPress={handleLogout} activeOpacity={0.7}>
-            <Ionicons name="log-out-outline" size={22} color="#ec4899" />
-            <Text style={[s.actionLabel, { color: '#ec4899' }]}>Logout</Text>
-            <Ionicons name="chevron-forward" size={20} color="#ec4899" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.actionRow, s.actionBorder]} onPress={handleDeleteAccount} activeOpacity={0.7}>
-            <Ionicons name="trash-outline" size={22} color="#ef4444" />
-            <Text style={[s.actionLabel, { color: '#ef4444' }]}>Delete Account</Text>
-            <Ionicons name="chevron-forward" size={20} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+
+          {/* ── My Posts Grid ── */}
+          <View style={{ marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="grid" size={18} color="#818cf8" />
+                <Text style={s.sectionTitle}>My Posts</Text>
+              </View>
+              <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, fontWeight: '600' }}>
+                {myPosts.length} {myPosts.length === 1 ? 'post' : 'posts'}
+              </Text>
+            </View>
+
+            {myPosts.length === 0 ? (
+              <View style={[s.card, { alignItems: 'center', paddingVertical: 32 }]}>
+                <Ionicons name="document-text-outline" size={40} color="rgba(255,255,255,0.12)" />
+                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600', marginTop: 10 }}>No posts yet</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12, marginTop: 4 }}>Share your first post with the community!</Text>
+                <TouchableOpacity
+                  style={{ marginTop: 14, backgroundColor: '#6366f1', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  onPress={() => router.push('/(modals)/create-post')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add" size={18} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Create Post</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={s.gridContainer}>
+                {myPosts.map((post: Post, index: number) => {
+                  const hasImage = (post.images?.length ?? 0) > 0;
+                  return (
+                    <TouchableOpacity
+                      key={post.id || post._id}
+                      style={s.gridTile}
+                      activeOpacity={0.8}
+                      onPress={() => router.push(`/(modals)/post-viewer?userId=${userId}&startIndex=${index}` as any)}
+                    >
+                      {hasImage ? (
+                        <Image
+                          source={{ uri: post.images[0] }}
+                          style={s.gridImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={s.gridTextTile}>
+                          <Text style={s.gridTextContent} numberOfLines={4}>
+                            {post.title || post.content}
+                          </Text>
+                        </View>
+                      )}
+                      {/* Overlay with stats */}
+                      <View style={s.gridOverlay}>
+                        <View style={s.gridStat}>
+                          <Ionicons name="heart" size={12} color="#fff" />
+                          <Text style={s.gridStatText}>{post.like_count ?? post.likeCount ?? 0}</Text>
+                        </View>
+                      </View>
+                      {/* Multi-image indicator */}
+                      {(post.images?.length ?? 0) > 1 && (
+                        <View style={s.multiIndicator}>
+                          <Ionicons name="copy" size={14} color="#fff" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* Settings & Logout */}
+          <View style={s.card}>
+            <TouchableOpacity
+              style={s.actionRow}
+              activeOpacity={0.7}
+              onPress={() => router.push('/(modals)/settings' as any)}
+            >
+              <Ionicons name="settings-outline" size={22} color="rgba(255,255,255,0.6)" />
+              <Text style={s.actionLabel}>Settings</Text>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.2)" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.actionRow, s.actionBorder]}
+              activeOpacity={0.7}
+              onPress={() => setShowWhatsNew(true)}
+            >
+              <Ionicons name="sparkles-outline" size={22} color="#fbbf24" />
+              <Text style={s.actionLabel}>What's New</Text>
+              <View style={s.versionChip}>
+                <Text style={s.versionChipText}>v{CURRENT_VERSION}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.2)" />
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.actionRow, s.actionBorder]} onPress={handleLogout} activeOpacity={0.7}>
+              <Ionicons name="log-out-outline" size={22} color="#ec4899" />
+              <Text style={[s.actionLabel, { color: '#ec4899' }]}>Logout</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ec4899" />
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.actionRow, s.actionBorder]} onPress={handleDeleteAccount} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={22} color="#ef4444" />
+              <Text style={[s.actionLabel, { color: '#ef4444' }]}>Delete Account</Text>
+              <Ionicons name="chevron-forward" size={20} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
       <FriendsBottomSheet
         visible={showFriendsSheet}
         onClose={() => setShowFriendsSheet(false)}
         friends={myFriends}
         title={`${user.displayName || user.username || 'You'}'s Friends`}
+      />
+      <UpdateNotesModal
+        visible={showWhatsNew}
+        onClose={() => setShowWhatsNew(false)}
+        permanent={false}
       />
     </>
   );
@@ -648,5 +667,20 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'capitalize',
+  },
+
+  /* ── Version chip ── */
+  versionChip: {
+    backgroundColor: 'rgba(251,191,36,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.2)',
+  },
+  versionChipText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

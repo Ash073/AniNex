@@ -9,6 +9,10 @@ import { useNotification } from '@/components/NotificationProvider';
 import { scheduleLocalNotification } from '@/utils/pushNotifications';
 import api from '@/services/api';
 
+// Module-level flag to prevent duplicate listener registration
+// when useSocket() is called from multiple components simultaneously
+let listenersRegisteredBy: string | null = null;
+
 export const useSocket = () => {
   const { isAuthenticated, user, updateUser } = useAuthStore();
   const {
@@ -45,8 +49,16 @@ export const useSocket = () => {
     }
   }, []);
 
+  const instanceId = useRef(`socket-${Date.now()}-${Math.random()}`).current;
+
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    // Only register listeners if no other instance has done so
+    const shouldRegisterListeners = !listenersRegisteredBy;
+    if (shouldRegisterListeners) {
+      listenersRegisteredBy = instanceId;
+    }
 
     socketService.connect();
     setOnlineStatus(true);
@@ -205,16 +217,19 @@ export const useSocket = () => {
       });
     };
 
-    socketService.on('message:new', handleNewMessage);
-    socketService.on('message:new', handleMessageNotification);
-    socketService.on('message:deleted', handleMessageDeleted);
-    socketService.on('message:reaction', handleMessageReaction);
-    socketService.on('typing:start', handleTypingStart);
-    socketService.on('typing:stop', handleTypingStop);
-    socketService.on('dm:notification', handleDMNotification);
-    socketService.on('user:status', handleUserStatus);
-    socketService.on('server:added', handleServerAdded);
-    socketService.on('notification:new', handleNotificationNew);
+    // Only register event listeners if this instance owns them
+    if (shouldRegisterListeners) {
+      socketService.on('message:new', handleNewMessage);
+      socketService.on('message:new', handleMessageNotification);
+      socketService.on('message:deleted', handleMessageDeleted);
+      socketService.on('message:reaction', handleMessageReaction);
+      socketService.on('typing:start', handleTypingStart);
+      socketService.on('typing:stop', handleTypingStop);
+      socketService.on('dm:notification', handleDMNotification);
+      socketService.on('user:status', handleUserStatus);
+      socketService.on('server:added', handleServerAdded);
+      socketService.on('notification:new', handleNotificationNew);
+    }
 
     // ── AppState tracking for online/offline ──
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -235,16 +250,20 @@ export const useSocket = () => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
-      socketService.off('message:new', handleNewMessage);
-      socketService.off('message:new', handleMessageNotification);
-      socketService.off('message:deleted', handleMessageDeleted);
-      socketService.off('message:reaction', handleMessageReaction);
-      socketService.off('typing:start', handleTypingStart);
-      socketService.off('typing:stop', handleTypingStop);
-      socketService.off('dm:notification', handleDMNotification);
-      socketService.off('user:status', handleUserStatus);
-      socketService.off('server:added', handleServerAdded);
-      socketService.off('notification:new', handleNotificationNew);
+      // Only unregister listeners if this instance owns them
+      if (listenersRegisteredBy === instanceId) {
+        socketService.off('message:new', handleNewMessage);
+        socketService.off('message:new', handleMessageNotification);
+        socketService.off('message:deleted', handleMessageDeleted);
+        socketService.off('message:reaction', handleMessageReaction);
+        socketService.off('typing:start', handleTypingStart);
+        socketService.off('typing:stop', handleTypingStop);
+        socketService.off('dm:notification', handleDMNotification);
+        socketService.off('user:status', handleUserStatus);
+        socketService.off('server:added', handleServerAdded);
+        socketService.off('notification:new', handleNotificationNew);
+        listenersRegisteredBy = null;
+      }
       subscription.remove();
       setOnlineStatus(false);
       updateUser({ isOnline: false });
