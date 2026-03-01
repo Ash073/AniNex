@@ -282,8 +282,23 @@ export default function UserProfileScreen() {
                 <Text style={st.statLabel}>Friends</Text>
               </TouchableOpacity>
               <View style={st.stat}>
-                <Text style={[st.statNum, { textTransform: 'capitalize' }]}>{u.experience_level || u.experienceLevel || '—'}</Text>
+                <Text style={st.statNum}>{userPosts.length}</Text>
+                <Text style={st.statLabel}>Posts</Text>
+              </View>
+            </View>
+
+            <View style={[st.statsRow, { borderTopWidth: 0, paddingTop: 10 }]}>
+              <View style={st.stat}>
+                <Text style={st.statNum}>{u.level || 1}</Text>
                 <Text style={st.statLabel}>Level</Text>
+              </View>
+              <View style={st.stat}>
+                <Text style={st.statNum}>{u.xp || 0}</Text>
+                <Text style={st.statLabel}>XP</Text>
+              </View>
+              <View style={st.stat}>
+                <Text style={st.statNum}>{u.streak || 0} 🔥</Text>
+                <Text style={st.statLabel}>Streak</Text>
               </View>
             </View>
           </View>
@@ -420,6 +435,23 @@ export default function UserProfileScreen() {
                   </View>
                 </View>
               )}
+            </View>
+          )}
+
+          {/* Badges Section */}
+          {u.badges && u.badges.length > 0 && (
+            <View style={st.badgesSection}>
+              <View style={st.sectionHeader}>
+                <Ionicons name="ribbon-outline" size={20} color="#fbbf24" />
+                <Text style={st.sectionTitle}>Unlocked Badges</Text>
+              </View>
+              <View style={st.chipRow}>
+                {u.badges.map((badge: string, index: number) => (
+                  <View key={index} style={st.badgeChip}>
+                    <Text style={st.badgeText}>{badge}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
@@ -679,4 +711,23 @@ const st = StyleSheet.create({
   gridStat: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   gridStatText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   multiIndicator: { position: 'absolute', top: 6, right: 6 },
+  /* ── Badges ── */
+  badgesSection: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  badgeChip: {
+    backgroundColor: 'rgba(251,191,36,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.3)',
+  },
+  badgeText: { color: '#fbbf24', fontWeight: '700', fontSize: 13 },
 });

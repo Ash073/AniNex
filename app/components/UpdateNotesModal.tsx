@@ -18,7 +18,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // ══════════════════════════════════════════════════════════
 //  UPDATE NOTES — Edit this for each new version
 // ══════════════════════════════════════════════════════════
-export const CURRENT_VERSION = '1.0.0';
+export const CURRENT_VERSION = '1.1.0';
 const STORAGE_KEY = `@animex_update_dismissed_v${CURRENT_VERSION}`;
 
 export interface UpdateNote {
@@ -32,47 +32,47 @@ export interface UpdateNote {
 
 export const UPDATE_NOTES: UpdateNote[] = [
     {
+        icon: 'flame',
+        iconColor: '#f97316',
+        title: 'Streak & XP System',
+        description:
+            'Gamification is here! Earn XP for being active, level up your profile, and maintain daily login streaks to unlock exclusive badges.',
+        tag: 'Major',
+        tagColor: '#f97316',
+    },
+    {
+        icon: 'bulb',
+        iconColor: '#fbbf24',
+        title: 'Daily Anime Facts',
+        description:
+            'Learn something new every day with automated anime facts delivered straight to your notifications.',
+        tag: 'New',
+        tagColor: '#22c55e',
+    },
+    {
+        icon: 'people',
+        iconColor: '#6366f1',
+        title: 'Friend Activity Alerts',
+        description:
+            'Never miss a moment with your squad. Get notified as soon as your friends come online.',
+        tag: 'New',
+        tagColor: '#22c55e',
+    },
+    {
+        icon: 'checkmark-shield',
+        iconColor: '#10b981',
+        title: 'Critical Stability Fix',
+        description:
+            'Resolved the "Black Screen" crash issue that occurred after the loader in some APK builds. The app is now smoother and more reliable.',
+        tag: 'Fixed',
+        tagColor: '#3b82f6',
+    },
+    {
         icon: 'at',
         iconColor: '#ec4899',
-        title: 'Mention Friends in Posts',
+        title: 'Mention Improvements',
         description:
-            'Tag anyone using @username while creating a post. They\'ll receive a notification instantly.',
-        tag: 'New',
-        tagColor: '#22c55e',
-    },
-    {
-        icon: 'notifications',
-        iconColor: '#f59e0b',
-        title: 'Push Notifications',
-        description:
-            'Stay in the loop — get notified for DMs, server messages, friend requests, and mentions even when the app is closed.',
-        tag: 'New',
-        tagColor: '#22c55e',
-    },
-    {
-        icon: 'flash',
-        iconColor: '#6366f1',
-        title: 'Posts Appear Instantly',
-        description:
-            'Your posts and images now show up in the feed immediately after you share them. No more waiting.',
-        tag: 'Fixed',
-        tagColor: '#3b82f6',
-    },
-    {
-        icon: 'chatbubbles',
-        iconColor: '#818cf8',
-        title: 'Server Messaging Improved',
-        description:
-            'Messages in servers are no longer sent twice. Sending is now reliable and fast.',
-        tag: 'Fixed',
-        tagColor: '#3b82f6',
-    },
-    {
-        icon: 'images',
-        iconColor: '#22c55e',
-        title: 'Smarter Image Loading',
-        description:
-            'Post images that fail to load will automatically retry. You can also tap any failed image to reload it.',
+            'Tapping a mention notification now takes you directly to the specific channel or message.',
         tag: 'Improved',
         tagColor: '#f59e0b',
     },

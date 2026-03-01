@@ -236,7 +236,7 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Stats row */}
+            {/* Stats rows */}
             <View style={s.statsRow}>
               <View style={s.stat}>
                 <Text style={s.statNum}>{user.servers?.length ?? 0}</Text>
@@ -251,8 +251,23 @@ export default function ProfileScreen() {
                 <Text style={s.statLabel}>Friends</Text>
               </TouchableOpacity>
               <View style={s.stat}>
-                <Text style={[s.statNum, { textTransform: 'capitalize' }]}>{user.experienceLevel}</Text>
+                <Text style={s.statNum}>{myPosts.length}</Text>
+                <Text style={s.statLabel}>Posts</Text>
+              </View>
+            </View>
+
+            <View style={[s.statsRow, { borderTopWidth: 0, paddingTop: 10 }]}>
+              <View style={s.stat}>
+                <Text style={s.statNum}>{user.level || 1}</Text>
                 <Text style={s.statLabel}>Level</Text>
+              </View>
+              <View style={s.stat}>
+                <Text style={s.statNum}>{user.xp || 0}</Text>
+                <Text style={s.statLabel}>XP</Text>
+              </View>
+              <View style={s.stat}>
+                <Text style={s.statNum}>{user.streak || 0} 🔥</Text>
+                <Text style={s.statLabel}>Streak</Text>
               </View>
             </View>
           </View>
@@ -278,7 +293,22 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          {/* ── Expanded interests panel ── */}
+          {/* Badges Section */}
+          {user.badges && user.badges.length > 0 && (
+            <View style={s.badgesSection}>
+              <View style={s.sectionHeader}>
+                <Ionicons name="ribbon-outline" size={20} color="#fbbf24" />
+                <Text style={s.sectionTitle}>Your Badges</Text>
+              </View>
+              <View style={s.chipRow}>
+                {user.badges.map((badge: string, index: number) => (
+                  <View key={index} style={s.badgeChip}>
+                    <Text style={s.badgeText}>{badge}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
           {showInterests && hasAnyInterests && (
             <View style={s.interestsPanel}>
               {/* Favorite Anime */}
@@ -683,4 +713,23 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
+  /* ── Badges ── */
+  badgesSection: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  badgeChip: {
+    backgroundColor: 'rgba(251,191,36,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.3)',
+  },
+  badgeText: { color: '#fbbf24', fontWeight: '700', fontSize: 13 },
 });

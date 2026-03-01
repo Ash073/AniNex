@@ -97,6 +97,21 @@ export default function RootLayout() {
         } as any);
       } else if (data?.type === 'friend_request') {
         router.push('/(modals)/notifications' as any);
+      } else if (data?.type === 'anime_fact') {
+        // Tapping a fact takes them to the home feed
+        router.push('/(tabs)/home');
+      } else if (data?.type === 'friend_online' && data?.friend_id) {
+        // Tapping "friend is online" takes them to that user's profile
+        router.push(`/(modals)/user-profile?userId=${data.friend_id}` as any);
+      } else if (data?.type === 'mention' && data?.channelId) {
+        // Tapping a mention takes them to the channel
+        router.push({
+          pathname: '/(modals)/chat/[channelId]',
+          params: { channelId: data.channelId as string },
+        } as any);
+      } else if (data?.type === 'post_like' || data?.type === 'post_comment') {
+        // Tapping post interactions takes them to the post
+        if (data?.post_id) router.push(`/(modals)/post/${data.post_id}`);
       }
     });
 

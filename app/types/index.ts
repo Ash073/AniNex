@@ -40,6 +40,12 @@ export interface User {
   created_at?: string;
   updatedAt: Date;
   updated_at?: string;
+  xp?: number;
+  level?: number;
+  streak?: number;
+  badges?: string[];
+  lastLogin?: string;
+  last_login?: string;
 }
 
 export interface Server {

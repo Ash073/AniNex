@@ -126,6 +126,10 @@ export const useAuthStore = create<AuthState>((set) => ({
                 interests: raw.interests || [],
                 servers: raw.servers || [],
                 friends: raw.friends || [],
+                xp: raw.xp || 0,
+                level: raw.level || 1,
+                streak: raw.streak || 0,
+                badges: raw.badges || [],
               };
               set({ user, isAuthenticated: true });
             }

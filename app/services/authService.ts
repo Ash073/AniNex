@@ -23,6 +23,11 @@ const normalizeUser = (raw: any): User => {
     interests: raw.interests || [],
     servers: raw.servers || [],
     friends: raw.friends || [],
+    xp: raw.xp || 0,
+    level: raw.level || 1,
+    streak: raw.streak || 0,
+    badges: raw.badges || [],
+    lastLogin: raw.last_login || raw.lastLogin,
   };
 };
 

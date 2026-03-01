@@ -5,12 +5,6 @@ import { useAnimatedStyle } from 'react-native-reanimated';
 
 // Preview of the implementation logic
 export default function Index() {
-  const animatedTextSegment = useAnimatedStyle(() => {
-    return {
-      width: expandProgress.value * expansionWidth,
-      opacity: expandProgress.value,
-    };
-  });
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
   // Still loading tokens / user from storage
@@ -20,7 +14,7 @@ export default function Index() {
 
   // Fully authenticated and set-up → go to home
   if (isAuthenticated && user?.onboardingCompleted && user?.profileCompleted) {
-    return <Redirect href="/home" />;
+    return <Redirect href="/(tabs)/home" />;
   }
 
   // Authenticated but onboarding/profile incomplete
@@ -33,5 +27,5 @@ export default function Index() {
   }
 
   // Not authenticated → landing / welcome page
-  return <Redirect href="/welcome" />;
+  return <Redirect href="/(auth)/welcome" />;
 }
