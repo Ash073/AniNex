@@ -11,7 +11,7 @@ import UpdateNotesModal, { shouldShowUpdateNotes } from '@/components/UpdateNote
 const SCENE_BG = '#0a0a14';
 
 export default function TabsLayout() {
-  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const { isAuthenticated, user, isLoading, hasCheckedUpdateNotes, setHasCheckedUpdateNotes } = useAuthStore();
   const pathname = usePathname();
 
   // Initialize socket connection
@@ -19,11 +19,10 @@ export default function TabsLayout() {
 
   // Update notes modal visibility
   const [showUpdateNotes, setShowUpdateNotes] = useState(false);
-  const hasCheckedUpdateNotes = useRef(false);
 
   useEffect(() => {
-    if (isAuthenticated && user?.onboardingCompleted && !hasCheckedUpdateNotes.current) {
-      hasCheckedUpdateNotes.current = true;
+    if (isAuthenticated && user?.onboardingCompleted && !hasCheckedUpdateNotes) {
+      setHasCheckedUpdateNotes(true);
       // Check if we should show the update notes
       shouldShowUpdateNotes().then((shouldShow) => {
         if (shouldShow) {
@@ -32,7 +31,7 @@ export default function TabsLayout() {
         }
       });
     }
-  }, [isAuthenticated, user?.onboardingCompleted]);
+  }, [isAuthenticated, user?.onboardingCompleted, hasCheckedUpdateNotes]);
 
   if (isLoading) return null;
 

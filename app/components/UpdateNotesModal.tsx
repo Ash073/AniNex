@@ -116,6 +116,13 @@ export default function UpdateNotesModal({ visible, onClose, permanent = true }:
     }, [visible]);
 
     const handleClose = async () => {
+        // Persist immediately if permanent
+        if (permanent) {
+            try {
+                await SecureStore.setItemAsync(STORAGE_KEY, 'true');
+            } catch { }
+        }
+
         // Animate out
         Animated.parallel([
             Animated.timing(fadeAnim, {
@@ -128,12 +135,7 @@ export default function UpdateNotesModal({ visible, onClose, permanent = true }:
                 duration: 200,
                 useNativeDriver: true,
             }),
-        ]).start(async () => {
-            if (permanent) {
-                try {
-                    await SecureStore.setItemAsync(STORAGE_KEY, 'true');
-                } catch { }
-            }
+        ]).start(() => {
             onClose();
         });
     };

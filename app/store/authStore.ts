@@ -15,6 +15,8 @@ interface AuthState {
   clearAuth: () => Promise<void>;
   loadAuth: () => Promise<void>;
   setLoading: (loading: boolean) => void;
+  hasCheckedUpdateNotes: boolean;
+  setHasCheckedUpdateNotes: (checked: boolean) => void;
 }
 
 // Platform-agnostic storage helpers
@@ -47,7 +49,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   refreshToken: null,
   isAuthenticated: false,
   isLoading: true,
+  hasCheckedUpdateNotes: false,
 
+  setHasCheckedUpdateNotes: (checked: boolean) => set({ hasCheckedUpdateNotes: checked }),
   setLoading: (loading) => set({ isLoading: loading }),
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
@@ -74,7 +78,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: null,
         token: null,
         refreshToken: null,
-        isAuthenticated: false
+        isAuthenticated: false,
+        hasCheckedUpdateNotes: false,
       });
     } catch (error) {
       console.error('Error clearing auth:', error);
