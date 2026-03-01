@@ -5,6 +5,7 @@ const { supabase } = require('../config/supabase');
 const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../config/jwt');
 const { validate } = require('../middleware/validation');
 const { protect } = require('../middleware/auth');
+const { createFriendOnlineNotification } = require('../utils/notificationHelper');
 
 const router = express.Router();
 
@@ -146,22 +147,89 @@ router.post('/login', [
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Update online status
+    // Update online status and compute streak, XP, level, badges
+    const now = new Date();
+    const lastLogin = user.last_login ? new Date(user.last_login) : null;
+    let streak = user.streak || 0;
+    let xp = user.xp || 0;
+    let badges = user.badges || [];
+
+    if (lastLogin) {
+      const diffDays = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        streak += 1;
+      } else if (diffDays > 1) {
+        streak = 1;
+      }
+    } else {
+      streak = 1;
+    }
+
+    // Daily login reward (e.g., 10 XP)
+    xp += 10;
+    const level = Math.floor(xp / 100) + 1;
+
+    // Badge milestones for streaks
+    const badgeMap = { 5: '5-day streak', 10: '10-day streak', 30: '30-day streak' };
+    if (badgeMap[streak] && !badges.includes(badgeMap[streak])) {
+      badges.push(badgeMap[streak]);
+    }
+
+    // Ensure onboarding and profile flags are set
+    const onboarding_completed = user.onboarding_completed ?? false;
+    const profile_completed = user.profile_completed ?? false;
+
     await supabase
       .from('users')
-      .update({ is_online: true, last_seen: new Date().toISOString() })
+      .update({
+        is_online: true,
+        last_seen: now.toISOString(),
+        last_login: now.toISOString(),
+        streak,
+        xp,
+        level,
+        badges,
+        onboarding_completed,
+        profile_completed,
+      })
       .eq('id', user.id);
 
     const token = generateToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
 
+    // Fetch updated user
+    const { data: updatedUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    // Notify friends that user is online (only if they were offline for at least 1 hour)
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const wasOfflineLongEnough = !user.last_seen || (now - new Date(user.last_seen)) > ONE_HOUR_MS;
+
+    if (wasOfflineLongEnough && updatedUser.friends?.length > 0) {
+      // Find friends who have a push token
+      const { data: friendsToNotify } = await supabase
+        .from('users')
+        .select('id, push_token')
+        .in('id', updatedUser.friends)
+        .not('push_token', 'is', null);
+
+      if (friendsToNotify?.length > 0) {
+        for (const friend of friendsToNotify) {
+          await createFriendOnlineNotification(friend.id, updatedUser);
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: {
-        user: sanitizeUser(user),
+        user: sanitizeUser(updatedUser),
         token,
-        refreshToken
-      }
+        refreshToken,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

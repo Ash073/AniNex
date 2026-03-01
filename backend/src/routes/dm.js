@@ -3,6 +3,8 @@ const { body } = require('express-validator');
 const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
+const { addXP } = require('../utils/userProgress');
+const { createNewMessageNotification } = require('../utils/notificationHelper');
 
 const router = express.Router();
 
@@ -285,6 +287,9 @@ router.post('/messages', protect, [
       return res.status(500).json({ success: false, message: error.message });
     }
 
+    // Award XP for sending a DM (+2 XP)
+    await addXP(req.user.id, 2);
+
     // Update conversation last message
     await supabase
       .from('conversations')
@@ -314,6 +319,15 @@ router.post('/messages', protect, [
       conversationId,
       message: populatedMessage,
     });
+
+    // Send push notification
+    await createNewMessageNotification(
+      otherId,
+      req.user,
+      { content: content || 'Shared an image' },
+      conversationId,
+      'dm'
+    );
 
     res.json({ success: true, data: { message: populatedMessage } });
   } catch (error) {

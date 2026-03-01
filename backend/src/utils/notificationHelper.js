@@ -163,7 +163,7 @@ async function createFriendRequestNotification(receiverId, sender) {
     console.warn('Invalid friend request notification data:', { receiverId, sender });
     return null;
   }
-  
+
   return createNotification(
     receiverId,
     'friend_request',
@@ -184,10 +184,10 @@ async function createPostLikeNotification(postAuthorId, liker, post) {
     console.warn('Invalid post like notification data:', { postAuthorId, liker, post });
     return null;
   }
-  
+
   // Don't notify if user likes their own post
   if (postAuthorId === liker.id) return null;
-  
+
   return createNotification(
     postAuthorId,
     'post_like',
@@ -210,10 +210,10 @@ async function createPostCommentNotification(postAuthorId, commenter, post, comm
     console.warn('Invalid post comment notification data:', { postAuthorId, commenter, post, comment });
     return null;
   }
-  
+
   // Don't notify if user comments on their own post
   if (postAuthorId === commenter.id) return null;
-  
+
   return createNotification(
     postAuthorId,
     'post_comment',
@@ -236,7 +236,7 @@ async function createServerInviteNotification(userId, inviter, server) {
     console.warn('Invalid server invite notification data:', { userId, inviter, server });
     return null;
   }
-  
+
   return createNotification(
     userId,
     'server_added',
@@ -252,6 +252,67 @@ async function createServerInviteNotification(userId, inviter, server) {
   );
 }
 
+// Create new message notification
+async function createNewMessageNotification(userId, sender, message, targetId, type = 'dm', extra = {}) {
+  // Validate input
+  if (!userId || !sender || !message) {
+    console.warn('Invalid message notification data:', { userId, sender, message });
+    return null;
+  }
+
+  // Type: 'dm' or 'server_message'
+  const title = type === 'dm' ? `Message from ${sender.username}` : `New message in ${extra.channelName || 'channel'}`;
+
+  return createNotification(
+    userId,
+    type,
+    title,
+    message.content ? message.content.substring(0, 100) : 'Sent an attachment',
+    {
+      senderId: sender.id,
+      senderName: sender.display_name || sender.username,
+      senderAvatar: sender.avatar || null,
+      type,
+      ...(type === 'dm' ? { conversationId: targetId } : { channelId: targetId, channelName: extra.channelName, serverName: extra.serverName })
+    }
+  );
+}
+
+// Create friend online notification
+async function createFriendOnlineNotification(userId, friend) {
+  // Validate input
+  if (!userId || !friend || !friend.username) {
+    return null;
+  }
+
+  return createNotification(
+    userId,
+    'friend_online',
+    'Friend Online',
+    `${friend.username} is now online! 🎌`,
+    {
+      friend_id: friend.id,
+      friend_username: friend.username,
+      friend_avatar: friend.avatar || null
+    }
+  );
+}
+
+// Create daily anime fact notification
+async function createDailyFactNotification(userId, fact) {
+  if (!userId || !fact) return null;
+
+  return createNotification(
+    userId,
+    'anime_fact',
+    'Daily Anime Fact 🏮',
+    fact,
+    {
+      fact
+    }
+  );
+}
+
 module.exports = {
   createNotification,
   deleteNotification,
@@ -260,5 +321,8 @@ module.exports = {
   createFriendRequestNotification,
   createPostLikeNotification,
   createPostCommentNotification,
-  createServerInviteNotification
+  createServerInviteNotification,
+  createNewMessageNotification,
+  createFriendOnlineNotification,
+  createDailyFactNotification
 };

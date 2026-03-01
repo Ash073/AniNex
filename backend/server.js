@@ -62,6 +62,7 @@ app.use('/api/friends', require('./src/routes/friends'));
 app.use('/api/upload', require('./src/routes/upload'));
 app.use('/api/notifications', require('./src/routes/notifications'));
 app.use('/api/blocks', require('./src/routes/blocks'));
+app.use('/api/admin', require('./src/routes/admin'));
 
 // Socket.IO setup
 setupSocketHandlers(io);

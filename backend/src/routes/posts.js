@@ -4,6 +4,7 @@ const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
 const { createPostLikeNotification, createPostCommentNotification } = require('../utils/notificationHelper');
+const { addXP } = require('../utils/userProgress');
 
 const router = express.Router();
 
@@ -160,6 +161,9 @@ router.post('/', protect, [
     if (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
+
+    // Award XP for creating a post (+20 XP)
+    await addXP(req.user.id, 20);
 
     const enriched = {
       ...post,
@@ -519,6 +523,9 @@ router.post('/:id/like', protect, async (req, res) => {
       await supabase.from('post_likes').insert({ post_id: postId, user_id: req.user.id });
       liked = true;
 
+      // Award XP for liking a post (+2 XP)
+      await addXP(req.user.id, 2);
+
       // Send notification to post author (if not self-like)
       if (post.author_id !== req.user.id) {
         await createPostLikeNotification(post.author_id, req.user, post);
@@ -631,6 +638,9 @@ router.post('/:id/comments', protect, [
     if (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
+
+    // Award XP for commenting (+5 XP)
+    await addXP(req.user.id, 5);
 
     // Update post comment count
     await supabase

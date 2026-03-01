@@ -4,7 +4,8 @@ const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 const { validate } = require('../middleware/validation');
 
-const { createNotification } = require('../utils/notificationHelper');
+const { createNotification, createNewMessageNotification } = require('../utils/notificationHelper');
+const { addXP } = require('../utils/userProgress');
 const router = express.Router();
 
 // @route   GET /api/messages/channel/:channelId
@@ -87,9 +88,11 @@ router.post('/', protect, [
 
     const { data: channel } = await supabase
       .from('channels')
-      .select('id, server_id, message_count')
+      .select('id, name, server_id, message_count, servers(name)')
       .eq('id', channelId)
       .single();
+
+    const server_name = channel?.servers?.name || 'Server';
 
     if (!channel) {
       return res.status(404).json({ success: false, message: 'Channel not found' });
@@ -135,7 +138,7 @@ router.post('/', protect, [
           'mention',
           'You were mentioned',
           `${req.user.username} mentioned you in a message`,
-          { channelId, by: req.user.username }
+          { channelId, by: req.user.username, type: 'server_message' }
         );
       }
     }
@@ -158,6 +161,9 @@ router.post('/', protect, [
       return res.status(500).json({ success: false, message: error.message });
     }
 
+    // Award XP for sending a message (+2 XP)
+    await addXP(req.user.id, 2);
+
     // Update channel stats
     await supabase.from('channels').update({
       message_count: (channel.message_count || 0) + 1,
@@ -177,13 +183,18 @@ router.post('/', protect, [
     if (members) {
       for (const m of members) {
         if (m.user_id !== req.user.id) {
-          await createNotification(
-            m.user_id,
-            'server_message',
-            'New Message',
-            `${req.user.username} sent a new message in a server you are in`,
-            { channelId, by: req.user.username }
-          );
+          // Check if user was mentioned to avoid double notification
+          const wasMentioned = mentions.some(mnt => mnt.user_id === m.user_id);
+          if (!wasMentioned) {
+            await createNewMessageNotification(
+              m.user_id,
+              req.user,
+              { content: processedContent },
+              channelId,
+              'server_message',
+              { channelName: channel.name, serverName: server_name }
+            );
+          }
         }
       }
     }

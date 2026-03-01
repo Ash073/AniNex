@@ -3,6 +3,7 @@ const router = express.Router();
 const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 const { createFriendRequestNotification } = require('../utils/notificationHelper');
+const { addXP, checkFriendBadges } = require('../utils/userProgress');
 
 // ─── Get accepted friends list with user details ───
 // GET /api/friends/list
@@ -108,6 +109,12 @@ router.post('/request/:userId', protect, async (req, res) => {
           io.to(`user:${senderId}`).emit('friend:accepted', { userId: receiverId });
         }
 
+        // Award XP and check badges
+        await addXP(senderId, 10);
+        await addXP(receiverId, 10);
+        await checkFriendBadges(senderId, [...myFriends, receiverId]);
+        await checkFriendBadges(receiverId, [...theirFriends, senderId]);
+
         return res.json({ success: true, data: { status: 'accepted', message: 'You are now friends!' } });
       }
       // Already sent
@@ -184,6 +191,12 @@ router.put('/accept/:requestId', protect, async (req, res) => {
         avatar: req.user.avatar,
       });
     }
+
+    // Award XP and check badges
+    await addXP(userId, 10);
+    await addXP(fr.sender_id, 10);
+    await checkFriendBadges(userId, [...myFriends, fr.sender_id]);
+    await checkFriendBadges(fr.sender_id, [...theirFriends, userId]);
 
     res.json({ success: true, message: 'Friend request accepted' });
   } catch (error) {

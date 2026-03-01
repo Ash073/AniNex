@@ -30,7 +30,7 @@ router.get('/search', protect, async (req, res) => {
 
     const { data: users, error } = await supabase
       .from('users')
-      .select('id, username, avatar, bio, display_name, is_online, genres, interests, favorite_anime, servers, friends')
+      .select('id, username, avatar, bio, display_name, is_online, genres, interests, favorite_anime, servers, friends, xp, level, streak, badges')
       .neq('id', req.user.id)
       .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
       .limit(parseInt(limit));
@@ -51,7 +51,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, username, email, avatar, bio, display_name, favorite_anime, genres, interests, experience_level, servers, friends, onboarding_completed, profile_completed, is_online, last_seen, created_at')
+      .select('id, username, email, avatar, bio, display_name, favorite_anime, genres, interests, experience_level, servers, friends, onboarding_completed, profile_completed, is_online, last_seen, created_at, gender, mobile, age, date_of_birth, settings, xp, level, streak, badges')
       .eq('id', req.params.id)
       .single();
 
