@@ -17,7 +17,7 @@
       "url": "https://u.expo.dev/fbb8db22-e484-4526-add1-fe80a4fbcdb5"
     },
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "1.0.0"
     },
     "ios": {
       "bundleIdentifier": "com.aninex.app",
