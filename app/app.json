@@ -7,23 +7,18 @@
     "icon": "./assets/logo/AniNex (1).png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "scheme": "aninex",
-
     "splash": {
       "image": "./assets/logo/AniNex (1).png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
-
     "updates": {
       "url": "https://u.expo.dev/fbb8db22-e484-4526-add1-fe80a4fbcdb5"
     },
-
     "runtimeVersion": {
       "policy": "appVersion"
     },
-
     "ios": {
       "bundleIdentifier": "com.aninex.app",
       "supportsTablet": true,
@@ -34,20 +29,17 @@
         "NSUserTrackingUsageDescription": "Used for improving user experience."
       }
     },
-
     "android": {
       "package": "com.aninex.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo/AniNex (1).png",
         "backgroundColor": "#000000"
       },
-
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES",
         "POST_NOTIFICATIONS"
       ],
-
       "usesFeature": [
         {
           "name": "android.hardware.camera",
@@ -58,17 +50,14 @@
           "required": false
         }
       ],
-
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
-
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/logo/AniNex (1).png"
     },
-
     "plugins": [
       "expo-router",
       "expo-web-browser",
@@ -77,7 +66,6 @@
       "expo-notifications",
       "expo-secure-store"
     ],
-
     "extra": {
       "expoPublicApiUrl": "https://aninex-1.onrender.com",
       "router": {},

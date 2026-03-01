@@ -218,21 +218,30 @@ export default function MessagesScreen() {
     const otherUser = item.otherUser;
     const avatarSrc = getAvatarSource(otherUser?.avatar);
 
+    const handleOpenConversation = async () => {
+      // Optimistically mark as read in UI
+      if (item.unreadCount && item.unreadCount > 0) {
+        item.unreadCount = 0;
+        // Optionally, trigger a re-render by refetching conversations after marking as read
+        setTimeout(() => refetchConvos(), 500);
+      }
+      // Mark all messages as read in backend
+      dmService.markRead(item.id).catch(() => {});
+      router.push({
+        pathname: '/(modals)/dm/[conversationId]',
+        params: {
+          conversationId: item.id,
+          name: otherUser?.display_name || otherUser?.username || 'User',
+          avatar: otherUser?.avatar || '',
+          recipientId: otherUser?.id,
+        },
+      } as any);
+    };
     return (
       <TouchableOpacity
         style={s.row}
         activeOpacity={0.75}
-        onPress={() =>
-          router.push({
-            pathname: '/(modals)/dm/[conversationId]',
-            params: {
-              conversationId: item.id,
-              name: otherUser?.display_name || otherUser?.username || 'User',
-              avatar: otherUser?.avatar || '',
-              recipientId: otherUser?.id,
-            },
-          } as any)
-        }
+        onPress={handleOpenConversation}
         onLongPress={() => {
           // Example: Show options modal or alert
           Alert.alert(

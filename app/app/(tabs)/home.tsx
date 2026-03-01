@@ -100,6 +100,7 @@ export default function HomeScreen() {
 
   // Add loading state for better UX
   const [loading, setLoading] = useState(true);
+  const [pendingFriendId, setPendingFriendId] = useState<string | null>(null);
 
   const { data: posts = [], refetch, isLoading } = useQuery({
     queryKey: ['posts', selectedCategory],
@@ -108,6 +109,8 @@ export default function HomeScreen() {
         category: selectedCategory || undefined,
         limit: 20,
       }),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Recommendations
@@ -155,10 +158,14 @@ export default function HomeScreen() {
       queryClient.invalidateQueries({ queryKey: ['recommended-users'] });
       refreshCurrentUser();
     },
+    onSettled: () => {
+      setPendingFriendId(null);
+    },
   });
 
   const handleAddFriend = (userId: string) => {
     if (myFriendIds.has(userId) || sentToIds.has(userId)) return;
+    setPendingFriendId(userId);
     sendRequestMutation.mutate(userId);
   };
 
@@ -204,11 +211,11 @@ export default function HomeScreen() {
       (old || []).map((p) =>
         (p._id || p.id) === postId
           ? {
-              ...p,
-              liked_by_me: !p.liked_by_me,
-              like_count: (p.like_count ?? p.likeCount ?? 0) + (p.liked_by_me ? -1 : 1),
-              likeCount: (p.likeCount ?? p.like_count ?? 0) + (p.liked_by_me ? -1 : 1),
-            }
+            ...p,
+            liked_by_me: !p.liked_by_me,
+            like_count: (p.like_count ?? p.likeCount ?? 0) + (p.liked_by_me ? -1 : 1),
+            likeCount: (p.likeCount ?? p.like_count ?? 0) + (p.liked_by_me ? -1 : 1),
+          }
           : p,
       ),
     );
@@ -246,6 +253,41 @@ export default function HomeScreen() {
     hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
 
   /* ─── Render helpers ─── */
+
+  /** Render post content with styled @mentions */
+  const renderPostContent = (text: string, numberOfLines?: number) => {
+    // Split by @mention pattern
+    const parts = text.split(/(@\w+)/g);
+    if (parts.length === 1) {
+      return (
+        <Text style={s.postBody} numberOfLines={numberOfLines}>
+          {text}
+        </Text>
+      );
+    }
+    return (
+      <Text style={s.postBody} numberOfLines={numberOfLines}>
+        {parts.map((part, i) => {
+          if (part.startsWith('@') && part.length > 1) {
+            return (
+              <Text
+                key={i}
+                style={s.mentionText}
+                onPress={() => {
+                  // Navigate to user profile
+                  const username = part.substring(1);
+                  // Just navigate to discover for now
+                }}
+              >
+                {part}
+              </Text>
+            );
+          }
+          return <Text key={i}>{part}</Text>;
+        })}
+      </Text>
+    );
+  };
 
   const ListHeader = () => (
     <View style={{ paddingTop: insets.top + 12 }}>
@@ -349,9 +391,9 @@ export default function HomeScreen() {
                   onPress={() => router.push(`/(modals)/user-profile?userId=${uid}` as any)}
                 >
                   {avatarSrc ? (
-                    <Image 
-                      source={avatarSrc} 
-                      style={s.recAvatar} 
+                    <Image
+                      source={avatarSrc}
+                      style={s.recAvatar}
                       resizeMode="cover"
                       fadeDuration={0} // Disable fade animation on Android
                     />
@@ -379,9 +421,9 @@ export default function HomeScreen() {
                       style={s.recBtnAdd}
                       onPress={() => handleAddFriend(uid)}
                       activeOpacity={0.7}
-                      disabled={sendRequestMutation.isPending}
+                      disabled={pendingFriendId === uid}
                     >
-                      {sendRequestMutation.isPending ? (
+                      {pendingFriendId === uid ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
                         <>
@@ -412,131 +454,167 @@ export default function HomeScreen() {
   const renderPost = ({ item }: { item: Post }) => {
     const authorAvatar = getAvatarSource(item.author?.avatar);
     const postId = item._id || item.id;
-    
+
     // Debug logging
     console.log('Rendering post:', { id: postId, title: item.title, content: item.content?.substring(0, 50) });
-    
+
     const isMyPost = (item.author_id || item.author?.id || item.author?._id) === (user?.id || user?._id);
     return (
-    <TouchableOpacity
-      style={s.card}
-      activeOpacity={0.85}
-      onPress={() => router.push(`/(modals)/post/${postId}`)}
-    >
-      {/* Author row with enhanced spacing */}
-      <View style={s.authorRow}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => {
-            const authorId = item.author_id || item.author?.id || item.author?._id;
-            if (authorId) router.push(`/(modals)/user-profile?userId=${authorId}` as any);
-          }}
-          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-        >
-        {authorAvatar ? (
-          <Image 
-            source={authorAvatar} 
-            style={s.authorAvatar} 
-            resizeMode="cover"
-            fadeDuration={0} // Disable fade animation on Android
-          />
-        ) : (
-          <View style={[s.authorAvatar, { backgroundColor: 'rgba(99,102,241,0.3)', alignItems: 'center', justifyContent: 'center' }]}>
-            <Ionicons name="person" size={16} color="rgba(255,255,255,0.5)" />
-          </View>
-        )}
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={s.authorName}>{item.author?.username ?? 'Anonymous'}</Text>
-          <Text style={s.authorDate}>
-            {formatPostTime(item.createdAt || item.created_at)}
-          </Text>
-        </View>
-        </TouchableOpacity>
-        <View style={s.categoryBadge}>
-          <Text style={s.categoryText}>{item.category}</Text>
-        </View>
-        {isMyPost && (
+      <TouchableOpacity
+        style={s.card}
+        activeOpacity={0.85}
+        onPress={() => router.push(`/(modals)/post/${postId}`)}
+      >
+        {/* Author row with enhanced spacing */}
+        <View style={s.authorRow}>
           <TouchableOpacity
-            style={{ marginLeft: 10, padding: 6 }}
-            onPress={() => handleDeletePost(postId)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            onPress={() => {
+              const authorId = item.author_id || item.author?.id || item.author?._id;
+              if (authorId) router.push(`/(modals)/user-profile?userId=${authorId}` as any);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
           >
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Enhanced title with better hierarchy */}
-      {item.title ? <Text style={s.postTitle}>{item.title}</Text> : null}
-      <Text style={s.postBody} numberOfLines={4}>
-        {item.content}
-      </Text>
-
-      {/* Enhanced image with better spacing */}
-      {item.images?.length > 0 && (
-        <View style={{ marginBottom: 14, marginTop: 6 }}>
-          <AutoImage
-            uri={item.images[0]}
-            borderRadius={16}
-            marginBottom={0}
-          />
-        </View>
-      )}
-
-      {/* Enhanced tags with better layout */}
-      {item.tags?.length > 0 && (
-        <View style={s.tagRow}>
-          {item.tags.slice(0, 4).map((t) => (
-            <View key={t} style={s.tag}>
-              <Text style={s.tagText}>#{t}</Text>
+            {authorAvatar ? (
+              <Image
+                source={authorAvatar}
+                style={s.authorAvatar}
+                resizeMode="cover"
+                fadeDuration={0} // Disable fade animation on Android
+              />
+            ) : (
+              <View style={[s.authorAvatar, { backgroundColor: 'rgba(99,102,241,0.3)', alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="person" size={16} color="rgba(255,255,255,0.5)" />
+              </View>
+            )}
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={s.authorName}>{item.author?.username ?? 'Anonymous'}</Text>
+              <Text style={s.authorDate}>
+                {formatPostTime(item.createdAt || item.created_at)}
+              </Text>
             </View>
-          ))}
+          </TouchableOpacity>
+          <View style={s.categoryBadge}>
+            <Text style={s.categoryText}>{item.category}</Text>
+          </View>
+          {isMyPost && (
+            <TouchableOpacity
+              style={{ marginLeft: 10, padding: 6 }}
+              onPress={() => handleDeletePost(postId)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            </TouchableOpacity>
+          )}
         </View>
-      )}
 
-      {/* Engagement indicators */}
-      <View style={s.engagementRow}>
-        <View style={s.engagementBadge}>
-          <Ionicons name="eye-outline" size={14} color="rgba(255,255,255,0.4)" />
-          <Text style={s.engagementText}>
-            {item.viewCount ?? 0} views
-          </Text>
-        </View>
-        {(item.likeCount ?? item.like_count ?? 0) > 10 && (
-          <View style={s.trendingBadge}>
-            <Ionicons name="flame" size={12} color="#f97316" />
-            <Text style={s.trendingText}>Trending</Text>
+        {/* Enhanced title with better hierarchy */}
+        {item.title ? <Text style={s.postTitle}>{item.title}</Text> : null}
+        {renderPostContent(item.content, 4)}
+
+        {/* Mentions indicator */}
+        {(item.mentions ?? []).length > 0 && (
+          <View style={s.mentionsRow}>
+            <Ionicons name="at" size={12} color="#818cf8" />
+            <Text style={s.mentionsText}>
+              {(item.mentions ?? []).length} mention{(item.mentions ?? []).length > 1 ? 's' : ''}
+            </Text>
           </View>
         )}
-      </View>
 
-      {/* Enhanced actions with better separation */}
-      <View style={s.actionRow}>
-        <TouchableOpacity
-          onPress={() => handleLike(item._id || item.id)}
-          style={s.actionBtn}
-        >
-          <Ionicons
-            name={item.liked_by_me ? 'heart' : 'heart-outline'}
-            size={20}
-            color="#ec4899"
-          />
-          <Text style={s.actionText}>{item.likeCount ?? item.like_count ?? 0}</Text>
-        </TouchableOpacity>
+        {/* Image gallery with multiple image support */}
+        {item.images?.length > 0 && (
+          <View style={{ marginBottom: 14, marginTop: 6 }}>
+            {item.images.length === 1 ? (
+              <AutoImage
+                uri={item.images[0]}
+                borderRadius={16}
+                marginBottom={0}
+              />
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginHorizontal: -4 }}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
+              >
+                {item.images.slice(0, 4).map((imgUri: string, imgIdx: number) => (
+                  <View key={imgIdx} style={{ position: 'relative' }}>
+                    <Image
+                      source={{ uri: imgUri }}
+                      style={{
+                        width: 180,
+                        height: 180,
+                        borderRadius: 14,
+                      }}
+                      resizeMode="cover"
+                    />
+                    {imgIdx === 3 && item.images.length > 4 && (
+                      <View style={s.moreImagesOverlay}>
+                        <Text style={s.moreImagesText}>+{item.images.length - 4}</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        )}
 
-        <TouchableOpacity 
-          style={s.actionBtn}
-          onPress={() => router.push(`/(modals)/post/${postId}`)}
-        >
-          <Ionicons name="chatbubble-outline" size={20} color="rgba(255,255,255,0.6)" />
-          <Text style={s.actionText}>{item.commentCount ?? item.comment_count ?? 0}</Text>
-        </TouchableOpacity>
+        {/* Enhanced tags with better layout */}
+        {item.tags?.length > 0 && (
+          <View style={s.tagRow}>
+            {item.tags.slice(0, 4).map((t) => (
+              <View key={t} style={s.tag}>
+                <Text style={s.tagText}>#{t}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
-        <TouchableOpacity style={s.actionBtn} onPress={() => setSharePostData(item)}>
-          <Ionicons name="paper-plane-outline" size={20} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+        {/* Engagement indicators */}
+        <View style={s.engagementRow}>
+          <View style={s.engagementBadge}>
+            <Ionicons name="eye-outline" size={14} color="rgba(255,255,255,0.4)" />
+            <Text style={s.engagementText}>
+              {item.viewCount ?? 0} views
+            </Text>
+          </View>
+          {(item.likeCount ?? item.like_count ?? 0) > 10 && (
+            <View style={s.trendingBadge}>
+              <Ionicons name="flame" size={12} color="#f97316" />
+              <Text style={s.trendingText}>Trending</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Enhanced actions with better separation */}
+        <View style={s.actionRow}>
+          <TouchableOpacity
+            onPress={() => handleLike(item._id || item.id)}
+            style={s.actionBtn}
+          >
+            <Ionicons
+              name={item.liked_by_me ? 'heart' : 'heart-outline'}
+              size={20}
+              color="#ec4899"
+            />
+            <Text style={s.actionText}>{item.likeCount ?? item.like_count ?? 0}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.actionBtn}
+            onPress={() => router.push(`/(modals)/post/${postId}`)}
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="rgba(255,255,255,0.6)" />
+            <Text style={s.actionText}>{item.commentCount ?? item.comment_count ?? 0}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={s.actionBtn} onPress={() => setSharePostData(item)}>
+            <Ionicons name="paper-plane-outline" size={20} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -586,7 +664,7 @@ export default function HomeScreen() {
                 <Ionicons name="document-text-outline" size={64} color="rgba(255,255,255,0.2)" />
                 <Text style={s.emptyTitle}>No posts yet</Text>
                 <Text style={s.emptyText}>Be the first to share your thoughts!</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={s.emptyButton}
                   onPress={() => router.push('/(modals)/create-post')}
                   activeOpacity={0.8}
@@ -800,18 +878,49 @@ const s = StyleSheet.create({
   },
 
   /* Post content with better hierarchy */
-  postTitle: { 
-    color: '#fff', 
-    fontWeight: '800', 
-    fontSize: 18, 
+  postTitle: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 18,
     marginBottom: 8,
     lineHeight: 24,
   },
-  postBody: { 
-    color: 'rgba(255,255,255,0.7)', 
-    fontSize: 15, 
-    lineHeight: 22, 
+  postBody: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 15,
+    lineHeight: 22,
     marginBottom: 12,
+  },
+  mentionText: {
+    color: '#818cf8',
+    fontWeight: '700',
+  },
+  mentionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  mentionsText: {
+    color: '#818cf8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  moreImagesOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreImagesText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
   },
   postImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 10 },
 
@@ -871,23 +980,23 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
   },
-  actionBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  actionText: { 
-    color: 'rgba(255,255,255,0.6)', 
+  actionText: {
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
     fontWeight: '600',
   },
 
   /* Empty state with better UX */
-  empty: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  empty: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingTop: 120,
     paddingHorizontal: 32,
   },
@@ -899,9 +1008,9 @@ const s = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  emptyText: { 
-    color: 'rgba(255,255,255,0.35)', 
-    marginTop: 8, 
+  emptyText: {
+    color: 'rgba(255,255,255,0.35)',
+    marginTop: 8,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -944,27 +1053,27 @@ const s = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  recAvatar: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
+  recAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     marginBottom: 10,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-  recName: { 
-    color: '#fff', 
-    fontWeight: '700', 
-    fontSize: 14, 
-    marginBottom: 6, 
+  recName: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 6,
     textAlign: 'center',
     lineHeight: 18,
   },
-  recBio: { 
-    color: 'rgba(255,255,255,0.5)', 
-    fontSize: 12, 
-    marginBottom: 12, 
-    textAlign: 'center', 
+  recBio: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginBottom: 12,
+    textAlign: 'center',
     lineHeight: 16,
     minHeight: 32,
   },

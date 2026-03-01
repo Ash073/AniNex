@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Image, View, Text, StyleSheet, Dimensions, Platform, Animated } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { Image, View, Text, StyleSheet, Dimensions, Platform, Animated, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -43,15 +43,26 @@ export default function AutoImage({
   const [aspectRatio, setAspectRatio] = useState<number>(RATIO_SQUARE);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [imageOpacity] = useState(new Animated.Value(0));
   const [loadingOpacity] = useState(new Animated.Value(1));
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const containerWidth = maxWidth || SCREEN_WIDTH - 64; // default with padding
 
+  // Build URI with cache buster for retries
+  const imageUri = retryCount > 0 ? `${uri}${uri.includes('?') ? '&' : '?'}cb=${retryCount}` : uri;
+
   useEffect(() => {
-    if (!uri) { 
-      setError(true); 
-      return; 
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!uri) {
+      setError(true);
+      return;
     }
 
     // Skip non-http URIs (local file:// or blob: URLs won't work after restart)
@@ -63,7 +74,7 @@ export default function AutoImage({
 
     setError(false);
     setLoaded(false);
-    
+
     // Reset animations
     imageOpacity.setValue(0);
     loadingOpacity.setValue(1);
@@ -75,70 +86,83 @@ export default function AutoImage({
           setAspectRatio(snapToStandard(img.width / img.height));
         }
         setLoaded(true);
-        // Animate in
-        Animated.parallel([
-          Animated.timing(imageOpacity, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(loadingOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          })
-        ]).start();
+        animateIn();
       };
-      img.onerror = () => { 
-        setLoaded(true); 
-        setError(true);
-        Animated.timing(loadingOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
+      img.onerror = () => {
+        handleLoadError();
       };
-      img.src = uri;
+      img.src = imageUri;
     } else {
       Image.getSize(
-        uri,
+        imageUri,
         (w, h) => {
           if (w && h) setAspectRatio(snapToStandard(w / h));
           setLoaded(true);
-          // Animate in
-          Animated.parallel([
-            Animated.timing(imageOpacity, {
-              toValue: 1,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.timing(loadingOpacity, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            })
-          ]).start();
+          animateIn();
         },
-        () => { 
-          setLoaded(true); 
-          setError(true);
-          Animated.timing(loadingOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
+        () => {
+          handleLoadError();
         },
       );
     }
-  }, [uri]);
+  }, [uri, retryCount]);
+
+  const animateIn = () => {
+    Animated.parallel([
+      Animated.timing(imageOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(loadingOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const handleLoadError = () => {
+    // Auto-retry up to 3 times with increasing delays
+    if (retryCount < 3) {
+      const delay = (retryCount + 1) * 2000; // 2s, 4s, 6s
+      retryTimerRef.current = setTimeout(() => {
+        setRetryCount(prev => prev + 1);
+      }, delay);
+    } else {
+      setLoaded(true);
+      setError(true);
+      Animated.timing(loadingOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const handleManualRetry = () => {
+    setRetryCount(prev => prev + 1);
+    setError(false);
+    setLoaded(false);
+    loadingOpacity.setValue(1);
+    imageOpacity.setValue(0);
+  };
 
   if (error || !uri) {
-    // Show a placeholder for broken images
+    // Show a placeholder for broken images with retry button
     return (
-      <View style={[styles.wrapper, styles.errorWrapper, { borderRadius, marginBottom }]}>
+      <TouchableOpacity
+        style={[styles.wrapper, styles.errorWrapper, { borderRadius, marginBottom }]}
+        onPress={handleManualRetry}
+        activeOpacity={0.7}
+      >
         <Ionicons name="image-outline" size={32} color="rgba(255,255,255,0.2)" />
         <Text style={styles.errorText}>Image unavailable</Text>
-      </View>
+        <View style={styles.retryButton}>
+          <Ionicons name="refresh" size={14} color="#818cf8" />
+          <Text style={styles.retryText}>Tap to retry</Text>
+        </View>
+      </TouchableOpacity>
     );
   }
 
@@ -148,10 +172,10 @@ export default function AutoImage({
     <View style={[styles.wrapper, { borderRadius, marginBottom }]}>
       {/* Loading indicator */}
       {showLoadingIndicator && (
-        <Animated.View 
+        <Animated.View
           style={[
-            styles.loadingOverlay, 
-            { 
+            styles.loadingOverlay,
+            {
               opacity: loadingOpacity,
               borderRadius,
             }
@@ -162,10 +186,13 @@ export default function AutoImage({
           </View>
         </Animated.View>
       )}
-      
+
       {/* Image with fade-in animation */}
       <Animated.Image
-        source={{ uri }}
+        source={{
+          uri: imageUri,
+          cache: 'reload',
+        }}
         style={[
           styles.image,
           {
@@ -176,6 +203,10 @@ export default function AutoImage({
           },
         ]}
         resizeMode="cover"
+        onError={() => {
+          // If Image component itself fails after getSize succeeded
+          if (!error) handleLoadError();
+        }}
       />
     </View>
   );
@@ -197,6 +228,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.25)',
     fontSize: 12,
     marginTop: 6,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.12)',
+  },
+  retryText: {
+    color: '#818cf8',
+    fontSize: 11,
+    fontWeight: '600',
   },
   image: {
     width: '100%',

@@ -6,6 +6,7 @@ import { Message, DirectMessage } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNotification } from '@/components/NotificationProvider';
+import { scheduleLocalNotification } from '@/utils/pushNotifications';
 import api from '@/services/api';
 
 export const useSocket = () => {
@@ -54,7 +55,24 @@ export const useSocket = () => {
 
     // ── Channel messages ──
     const handleNewMessage = (message: Message) => {
-      addMessage(message.channel, message);
+      const channelId = message.channel || message.channel_id;
+      if (!channelId) return;
+
+      // Deduplicate: remove any optimistic message from the same author
+      // (optimistic IDs start with 'optimistic-')
+      const state = useChatStore.getState();
+      const existing = state.messages[channelId] || [];
+      const authorId = message.author?.id || (message as any).author_id;
+
+      // If this is our own message, remove the optimistic placeholder
+      if (authorId === userId) {
+        const withoutOptimistic = existing.filter(
+          (m) => !m.id.startsWith('optimistic-') || (m as any).author_id !== userId
+        );
+        useChatStore.getState().setMessages(channelId, [message, ...withoutOptimistic]);
+      } else {
+        addMessage(channelId, message);
+      }
     };
 
     const handleMessageDeleted = (data: { messageId: string; channelId: string }) => {
@@ -109,6 +127,14 @@ export const useSocket = () => {
           body,
           avatar: senderAvatar,
         });
+
+        // Also schedule a device push notification (shows in notification tray)
+        scheduleLocalNotification(senderName, body, {
+          type: 'dm',
+          conversationId: payload?.conversationId,
+          senderName,
+          senderAvatar,
+        });
       }
     };
 
@@ -126,6 +152,15 @@ export const useSocket = () => {
           body,
           avatar: authorAvatar,
         });
+
+        // Also schedule a device push notification
+        const channelId = message.channel || (message as any).channel_id;
+        scheduleLocalNotification(`${authorName} in server`, body, {
+          type: 'server_message',
+          channelId,
+          channelName: (message as any).channelName,
+          serverName: (message as any).serverName,
+        });
       }
     };
 
@@ -142,6 +177,32 @@ export const useSocket = () => {
         title: 'Added to Server',
         body: `${addedBy} added you to "${serverName}"`,
       });
+
+      scheduleLocalNotification('Added to Server', `${addedBy} added you to "${serverName}"`, {
+        type: 'server_added',
+        serverId: payload?.serverId,
+      });
+    };
+
+    // ── Real-time notifications (friend requests, likes, comments, etc.) ──
+    const handleNotificationNew = (payload: any) => {
+      queryClient?.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient?.invalidateQueries({ queryKey: ['notification-count'] });
+
+      const title = payload?.title || 'New Notification';
+      const body = payload?.body || '';
+      const type = payload?.type || 'general';
+
+      notify({
+        title,
+        body,
+      });
+
+      // Schedule a device push notification for the system tray
+      scheduleLocalNotification(title, body, {
+        type,
+        ...(payload?.data || {}),
+      });
     };
 
     socketService.on('message:new', handleNewMessage);
@@ -153,6 +214,7 @@ export const useSocket = () => {
     socketService.on('dm:notification', handleDMNotification);
     socketService.on('user:status', handleUserStatus);
     socketService.on('server:added', handleServerAdded);
+    socketService.on('notification:new', handleNotificationNew);
 
     // ── AppState tracking for online/offline ──
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -182,6 +244,7 @@ export const useSocket = () => {
       socketService.off('dm:notification', handleDMNotification);
       socketService.off('user:status', handleUserStatus);
       socketService.off('server:added', handleServerAdded);
+      socketService.off('notification:new', handleNotificationNew);
       subscription.remove();
       setOnlineStatus(false);
       updateUser({ isOnline: false });

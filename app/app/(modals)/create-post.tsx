@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,16 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useQueryClient } from '@tanstack/react-query';
 import { postService } from '@/services/postService';
 import { uploadImage } from '@/services/uploadService';
+import { userService } from '@/services/userService';
+import { friendService } from '@/services/friendService';
 import { useAuthStore } from '@/store/authStore';
 import { POST_CATEGORIES } from '@/constants/anime';
 import { safeGoBack } from '@/utils/navigation';
@@ -62,6 +66,7 @@ const MAX_IMAGES = 10;
 export default function CreatePostScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -74,11 +79,92 @@ export default function CreatePostScreen() {
   // Privacy controls
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'selected'>('public');
   const [commentsEnabled, setCommentsEnabled] = useState(true);
+  // Mention state
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionResults, setMentionResults] = useState<any[]>([]);
+  const [mentionedUsers, setMentionedUsers] = useState<{ id: string; username: string }[]>([]);
+  const [mentionSearching, setMentionSearching] = useState(false);
+  const mentionTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const contentRef = useRef<TextInput>(null);
   const avatarSrc = getAvatarSource(user?.avatar);
   const selectedCat = POST_CATEGORIES.find((c) => c.value === category);
   const canPost = content.trim().length > 0;
+
+  /* ── Mention search logic ── */
+  const searchMentions = useCallback(async (query: string) => {
+    if (query.length < 1) {
+      setMentionResults([]);
+      setShowMentions(false);
+      return;
+    }
+    setMentionSearching(true);
+    try {
+      // Search friends first, then fallback to all users
+      const friends = await friendService.getFriends();
+      const filtered = friends.filter((f: any) =>
+        (f.username || '').toLowerCase().includes(query.toLowerCase()) ||
+        (f.display_name || '').toLowerCase().includes(query.toLowerCase())
+      );
+      if (filtered.length > 0) {
+        setMentionResults(filtered.slice(0, 6));
+      } else {
+        // Search all users
+        const users = await userService.searchUsers(query);
+        setMentionResults(users.slice(0, 6));
+      }
+      setShowMentions(true);
+    } catch (err) {
+      console.error('[Mentions] Search error:', err);
+    } finally {
+      setMentionSearching(false);
+    }
+  }, []);
+
+  const handleContentChange = (text: string) => {
+    setContent(text);
+
+    // Detect @mention pattern: find the last @ followed by non-space characters
+    const cursorText = text;
+    const lastAtIdx = cursorText.lastIndexOf('@');
+    if (lastAtIdx >= 0) {
+      const afterAt = cursorText.substring(lastAtIdx + 1);
+      // Check if there's no space after the @mention query (user is still typing)
+      const spaceIdx = afterAt.indexOf(' ');
+      const query = spaceIdx === -1 ? afterAt : '';
+      if (query.length > 0 && query.length < 20) {
+        setMentionQuery(query);
+        if (mentionTimeout.current) clearTimeout(mentionTimeout.current);
+        mentionTimeout.current = setTimeout(() => searchMentions(query), 300);
+      } else {
+        setShowMentions(false);
+        setMentionQuery('');
+      }
+    } else {
+      setShowMentions(false);
+      setMentionQuery('');
+    }
+  };
+
+  const insertMention = (user: any) => {
+    const username = user.username;
+    const userId = user.id || user._id;
+    // Replace the @query with @username
+    const lastAtIdx = content.lastIndexOf('@');
+    if (lastAtIdx >= 0) {
+      const before = content.substring(0, lastAtIdx);
+      const newContent = `${before}@${username} `;
+      setContent(newContent);
+      // Track mentioned user
+      if (!mentionedUsers.find(m => m.id === userId)) {
+        setMentionedUsers(prev => [...prev, { id: userId, username }]);
+      }
+    }
+    setShowMentions(false);
+    setMentionQuery('');
+    contentRef.current?.focus();
+  };
 
   /* ── Image picker ── */
   const pickImage = async () => {
@@ -152,6 +238,11 @@ export default function CreatePostScreen() {
         }
       }
 
+      // Extract mentioned user IDs from content
+      const mentionIds = mentionedUsers
+        .filter(m => content.includes(`@${m.username}`))
+        .map(m => m.id);
+
       await postService.createPost({
         title: title.trim() || undefined,
         content: content.trim(),
@@ -160,7 +251,13 @@ export default function CreatePostScreen() {
         images: uploadedImageUrls,
         visibility,
         commentsEnabled,
-      });
+        mentions: mentionIds,
+      } as any);
+
+      // Invalidate all post-related queries so the home feed updates immediately
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['user-posts'] });
+
       Alert.alert('Posted! 🎉', 'Your post is now live.', [
         { text: 'OK', onPress: () => safeGoBack('/home') },
       ]);
@@ -206,7 +303,7 @@ export default function CreatePostScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ─ Author row (like IG) ─ */}
+          {/* ─ Author row ─ */}
           <View style={st.authorRow}>
             {avatarSrc ? (
               <Image source={avatarSrc} style={st.avatar} />
@@ -234,6 +331,34 @@ export default function CreatePostScreen() {
                 <Ionicons name="chevron-down" size={13} color="#818cf8" />
               </TouchableOpacity>
             </View>
+
+            {/* Visibility badge */}
+            <TouchableOpacity
+              style={st.visibilityBadge}
+              onPress={() => {
+                Alert.alert(
+                  'Audience',
+                  'Who can see this post?',
+                  [
+                    { text: 'Public', onPress: () => setVisibility('public') },
+                    { text: 'Followers only', onPress: () => setVisibility('followers') },
+                    { text: 'Selected people', onPress: () => setVisibility('selected') },
+                    { text: 'Cancel', style: 'cancel' }
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={
+                  visibility === 'public' ? 'earth' :
+                    visibility === 'followers' ? 'people' :
+                      'lock-closed'
+                }
+                size={14}
+                color={visibility === 'public' ? '#22c55e' : '#f59e0b'}
+              />
+            </TouchableOpacity>
           </View>
 
           {/* ─ Category Picker (expandable) ─ */}
@@ -281,14 +406,78 @@ export default function CreatePostScreen() {
           <TextInput
             ref={contentRef}
             value={content}
-            onChangeText={setContent}
-            placeholder="What's on your mind?"
+            onChangeText={handleContentChange}
+            placeholder="What's on your mind? Use @ to mention friends…"
             placeholderTextColor="rgba(255,255,255,0.25)"
             style={st.contentInput}
             multiline
             textAlignVertical="top"
             maxLength={5000}
           />
+
+          {/* ─ @Mention suggestions dropdown ─ */}
+          {showMentions && (
+            <View style={st.mentionDropdown}>
+              <View style={st.mentionHeader}>
+                <Ionicons name="at" size={14} color="#818cf8" />
+                <Text style={st.mentionHeaderText}>
+                  {mentionSearching ? 'Searching…' : `Mention a user`}
+                </Text>
+              </View>
+              {mentionResults.length === 0 && !mentionSearching ? (
+                <View style={st.mentionEmpty}>
+                  <Text style={st.mentionEmptyText}>No users found for "@{mentionQuery}"</Text>
+                </View>
+              ) : (
+                mentionResults.map((u: any) => {
+                  const uAvatar = getAvatarSource(u.avatar);
+                  return (
+                    <TouchableOpacity
+                      key={u.id || u._id}
+                      style={st.mentionItem}
+                      onPress={() => insertMention(u)}
+                      activeOpacity={0.7}
+                    >
+                      {uAvatar ? (
+                        <Image source={uAvatar} style={st.mentionAvatar} />
+                      ) : (
+                        <View style={[st.mentionAvatar, st.mentionAvatarFallback]}>
+                          <Ionicons name="person" size={12} color="rgba(255,255,255,0.4)" />
+                        </View>
+                      )}
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={st.mentionName}>
+                          {u.display_name || u.displayName || u.username}
+                        </Text>
+                        <Text style={st.mentionUsername}>@{u.username}</Text>
+                      </View>
+                      <View style={st.mentionInsertBadge}>
+                        <Text style={st.mentionInsertText}>mention</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
+          )}
+
+          {/* ─ Mentioned users chips ─ */}
+          {mentionedUsers.length > 0 && (
+            <View style={st.mentionedChipsRow}>
+              <Ionicons name="at" size={14} color="rgba(255,255,255,0.3)" style={{ marginRight: 6 }} />
+              {mentionedUsers.map((m) => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={st.mentionedChip}
+                  onPress={() => setMentionedUsers(prev => prev.filter(u => u.id !== m.id))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={st.mentionedChipText}>@{m.username}</Text>
+                  <Ionicons name="close" size={10} color="rgba(99,102,241,0.6)" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {/* ─ Character count ─ */}
           <View style={st.charRow}>
@@ -354,7 +543,7 @@ export default function CreatePostScreen() {
           {/* ─ Divider ─ */}
           <View style={st.divider} />
 
-          {/* ─ Toolbar / Attachments row (Instagram-style) ─ */}
+          {/* ─ Toolbar / Attachments row ─ */}
           <View style={st.toolbar}>
             <TouchableOpacity style={st.toolBtn} onPress={pickImage} activeOpacity={0.7}>
               <Ionicons name="images-outline" size={24} color="#22c55e" />
@@ -370,20 +559,25 @@ export default function CreatePostScreen() {
               style={st.toolBtn}
               activeOpacity={0.7}
               onPress={() => {
+                // Insert @ at cursor and trigger mention
+                const newContent = content + '@';
+                setContent(newContent);
+                contentRef.current?.focus();
+              }}
+            >
+              <Ionicons name="at" size={24} color="#ec4899" />
+              <Text style={st.toolLabel}>Mention</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={st.toolBtn}
+              activeOpacity={0.7}
+              onPress={() => {
                 if (tagInput === '' && tags.length === 0) setTagInput('#');
               }}
             >
               <Ionicons name="pricetag-outline" size={22} color="#f59e0b" />
               <Text style={st.toolLabel}>Tags</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={st.toolBtn}
-              onPress={() => setShowCategoryPicker((p) => !p)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="grid-outline" size={22} color="#ec4899" />
-              <Text style={st.toolLabel}>Category</Text>
             </TouchableOpacity>
           </View>
 
@@ -407,55 +601,23 @@ export default function CreatePostScreen() {
             )}
           </View>
 
-          {/* ─ Audience section ─ */}
-          <TouchableOpacity 
-            style={st.optionRow}
-            onPress={() => {
-              Alert.alert(
-                'Audience',
-                'Who can see this post?',
-                [
-                  { text: 'Public', onPress: () => setVisibility('public') },
-                  { text: 'Followers only', onPress: () => setVisibility('followers') },
-                  { text: 'Selected people', onPress: () => setVisibility('selected') },
-                  { text: 'Cancel', style: 'cancel' }
-                ]
-              );
-            }}
-          >
-            <Ionicons 
-              name={
-                visibility === 'public' ? 'earth-outline' : 
-                visibility === 'followers' ? 'people-outline' : 
-                'lock-closed-outline'
-              } 
-              size={22} 
-              color="rgba(255,255,255,0.5)" 
-            />
-            <Text style={st.optionText}>
-              {visibility === 'public' ? 'Everyone can see this post' : 
-               visibility === 'followers' ? 'Only followers can see this post' : 
-               'Only selected people can see this post'}
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.2)" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
+          {/* ─ Post options ─ */}
+          <TouchableOpacity
             style={st.optionRow}
             onPress={() => setCommentsEnabled(!commentsEnabled)}
           >
-            <Ionicons 
-              name={commentsEnabled ? 'chatbubble-ellipses-outline' : 'chatbubble-outline'} 
-              size={22} 
-              color="rgba(255,255,255,0.5)" 
+            <Ionicons
+              name={commentsEnabled ? 'chatbubble-ellipses-outline' : 'chatbubble-outline'}
+              size={22}
+              color="rgba(255,255,255,0.5)"
             />
             <Text style={st.optionText}>
               {commentsEnabled ? 'Comments are on' : 'Comments are off'}
             </Text>
-            <Ionicons 
-              name={commentsEnabled ? 'toggle' : 'toggle-outline'} 
-              size={24} 
-              color={commentsEnabled ? '#6366f1' : 'rgba(255,255,255,0.1)'} 
+            <Ionicons
+              name={commentsEnabled ? 'toggle' : 'toggle-outline'}
+              size={24}
+              color={commentsEnabled ? '#6366f1' : 'rgba(255,255,255,0.1)'}
             />
           </TouchableOpacity>
         </ScrollView>
@@ -517,6 +679,18 @@ const st = StyleSheet.create({
   },
   categoryChipText: { color: '#818cf8', fontSize: 12, fontWeight: '600' },
 
+  /* Visibility badge */
+  visibilityBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+
   /* Category picker grid */
   categoryGrid: {
     flexDirection: 'row',
@@ -561,6 +735,115 @@ const st = StyleSheet.create({
   },
   charRow: { paddingHorizontal: 16, alignItems: 'flex-end' },
   charCount: { color: 'rgba(255,255,255,0.2)', fontSize: 12 },
+
+  /* Mention dropdown */
+  mentionDropdown: {
+    marginHorizontal: 16,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.2)',
+    overflow: 'hidden',
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6366f1',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  mentionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  mentionHeaderText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mentionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.03)',
+  },
+  mentionAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  mentionAvatarFallback: {
+    backgroundColor: 'rgba(99,102,241,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mentionName: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  mentionUsername: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 11,
+  },
+  mentionInsertBadge: {
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  mentionInsertText: {
+    color: '#818cf8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  mentionEmpty: {
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  mentionEmptyText: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 12,
+  },
+
+  /* Mentioned users chips */
+  mentionedChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 6,
+  },
+  mentionedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(99,102,241,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.15)',
+  },
+  mentionedChipText: {
+    color: '#818cf8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
 
   /* Images */
   imgThumbWrap: { position: 'relative' },

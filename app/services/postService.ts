@@ -30,6 +30,7 @@ export const postService = {
     visibility?: 'public' | 'followers' | 'selected';
     allowedUsers?: string[];
     commentsEnabled?: boolean;
+    mentions?: string[];
   }) => {
     const { data } = await api.post<{ success: boolean; data: { post: Post } }>('/posts', postData);
     return data.data.post;

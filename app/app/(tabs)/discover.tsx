@@ -66,6 +66,7 @@ export default function DiscoverScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const queryClient = useQueryClient();
   const { user: currentUser, setUser } = useAuthStore();
+  const [pendingActionUserId, setPendingActionUserId] = useState<string | null>(null);
 
   // Debounced search
   const handleSearchChange = (text: string) => {
@@ -145,6 +146,9 @@ export default function DiscoverScreen() {
       queryClient.invalidateQueries({ queryKey: ['recommended-users'] });
       refreshCurrentUser();
     },
+    onSettled: () => {
+      setPendingActionUserId(null);
+    },
   });
 
   const acceptRequestMutation = useMutation({
@@ -155,6 +159,9 @@ export default function DiscoverScreen() {
       queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
       queryClient.invalidateQueries({ queryKey: ['recommended-users'] });
     },
+    onSettled: () => {
+      setPendingActionUserId(null);
+    },
   });
 
   const cancelRequestMutation = useMutation({
@@ -162,6 +169,9 @@ export default function DiscoverScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
       queryClient.invalidateQueries({ queryKey: ['recommended-users'] });
+    },
+    onSettled: () => {
+      setPendingActionUserId(null);
     },
   });
 
@@ -177,6 +187,7 @@ export default function DiscoverScreen() {
 
   const handleFriendAction = (userId: string) => {
     const rel = getRelationship(userId);
+    setPendingActionUserId(userId);
     if (rel === 'none') {
       sendRequestMutation.mutate(userId);
     } else if (rel === 'pending_sent') {
@@ -202,10 +213,7 @@ export default function DiscoverScreen() {
 
   const renderFriendButton = (userId: string) => {
     const rel = getRelationship(userId);
-    const isLoading =
-      sendRequestMutation.isPending ||
-      acceptRequestMutation.isPending ||
-      cancelRequestMutation.isPending;
+    const isThisUserLoading = pendingActionUserId === userId;
 
     switch (rel) {
       case 'friends':
@@ -221,10 +229,16 @@ export default function DiscoverScreen() {
             style={s.friendBtnPending}
             onPress={() => handleFriendAction(userId)}
             activeOpacity={0.7}
-            disabled={isLoading}
+            disabled={isThisUserLoading}
           >
-            <Ionicons name="time-outline" size={15} color="#f59e0b" />
-            <Text style={[s.friendBtnText, { color: '#f59e0b' }]}>Pending</Text>
+            {isThisUserLoading ? (
+              <ActivityIndicator size="small" color="#f59e0b" />
+            ) : (
+              <>
+                <Ionicons name="time-outline" size={15} color="#f59e0b" />
+                <Text style={[s.friendBtnText, { color: '#f59e0b' }]}>Pending</Text>
+              </>
+            )}
           </TouchableOpacity>
         );
       case 'pending_received':
@@ -233,10 +247,16 @@ export default function DiscoverScreen() {
             style={s.friendBtnAccept}
             onPress={() => handleFriendAction(userId)}
             activeOpacity={0.7}
-            disabled={isLoading}
+            disabled={isThisUserLoading}
           >
-            <Ionicons name="person-add" size={15} color="#fff" />
-            <Text style={s.friendBtnText}>Accept</Text>
+            {isThisUserLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="person-add" size={15} color="#fff" />
+                <Text style={s.friendBtnText}>Accept</Text>
+              </>
+            )}
           </TouchableOpacity>
         );
       default:
@@ -245,9 +265,9 @@ export default function DiscoverScreen() {
             style={s.friendBtnAdd}
             onPress={() => handleFriendAction(userId)}
             activeOpacity={0.7}
-            disabled={isLoading}
+            disabled={isThisUserLoading}
           >
-            {isLoading ? (
+            {isThisUserLoading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
@@ -323,37 +343,37 @@ export default function DiscoverScreen() {
                   {pendingRequests.map((req: any) => {
                     const senderAvatarSrc = getAvatarSource(req.sender?.avatar);
                     return (
-                    <View key={req.id} style={s.pendingCard}>
-                      {senderAvatarSrc ? (
-                        <Image source={senderAvatarSrc} style={s.pendingAvatar} />
-                      ) : (
-                        <View style={[s.pendingAvatar, { backgroundColor: 'rgba(99,102,241,0.25)', alignItems: 'center', justifyContent: 'center' }]}>
-                          <Ionicons name="person" size={20} color="rgba(255,255,255,0.5)" />
+                      <View key={req.id} style={s.pendingCard}>
+                        {senderAvatarSrc ? (
+                          <Image source={senderAvatarSrc} style={s.pendingAvatar} />
+                        ) : (
+                          <View style={[s.pendingAvatar, { backgroundColor: 'rgba(99,102,241,0.25)', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Ionicons name="person" size={20} color="rgba(255,255,255,0.5)" />
+                          </View>
+                        )}
+                        <Text style={s.pendingName} numberOfLines={1}>
+                          {req.sender?.display_name || req.sender?.username || 'User'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <TouchableOpacity
+                            style={s.pendingAcceptBtn}
+                            onPress={() => acceptRequestMutation.mutate(req.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={s.pendingRejectBtn}
+                            onPress={() => friendService.rejectRequest(req.id).then(() => {
+                              queryClient.invalidateQueries({ queryKey: ['friend-requests-pending'] });
+                            })}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="close" size={16} color="#fff" />
+                          </TouchableOpacity>
                         </View>
-                      )}
-                      <Text style={s.pendingName} numberOfLines={1}>
-                        {req.sender?.display_name || req.sender?.username || 'User'}
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 6 }}>
-                        <TouchableOpacity
-                          style={s.pendingAcceptBtn}
-                          onPress={() => acceptRequestMutation.mutate(req.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="checkmark" size={16} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={s.pendingRejectBtn}
-                          onPress={() => friendService.rejectRequest(req.id).then(() => {
-                            queryClient.invalidateQueries({ queryKey: ['friend-requests-pending'] });
-                          })}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="close" size={16} color="#fff" />
-                        </TouchableOpacity>
                       </View>
-                    </View>
-                  );
+                    );
                   })}
                 </ScrollView>
               </View>
@@ -382,9 +402,9 @@ export default function DiscoverScreen() {
                 return (
                   <View key={userId} style={s.userCard}>
                     {avatarSrc ? (
-                      <Image 
-                        source={avatarSrc} 
-                        style={s.userAvatar} 
+                      <Image
+                        source={avatarSrc}
+                        style={s.userAvatar}
                         resizeMode="cover"
                         fadeDuration={0} // Disable fade animation on Android
                       />

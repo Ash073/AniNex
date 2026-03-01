@@ -167,6 +167,8 @@ export interface Post {
   allowedUsers?: string[];
   // Comment controls
   commentsEnabled?: boolean;
+  // Mentions
+  mentions?: string[];
   createdAt: Date;
   created_at?: string;
   updatedAt: Date;

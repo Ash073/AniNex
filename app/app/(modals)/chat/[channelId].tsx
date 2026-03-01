@@ -100,7 +100,7 @@ export default function ChatScreen() {
     if (!messageText.trim()) return;
 
     if (editingMessage) {
-      // Handle message editing
+      // Handle message editing via REST (needs to update existing record)
       chatService.editMessage(editingMessage.id, messageText.trim())
         .then(updatedMessage => {
           // Update the message in the store
@@ -119,21 +119,45 @@ export default function ChatScreen() {
           console.error('Edit message error:', error);
         });
     } else {
-      // Handle regular message sending with reply functionality
+      // Send message via socket (reliable real-time delivery)
+      const content = messageText.trim();
       const repliedToId = replyingToMessage?.id;
 
-      chatService.sendMessage(channelId, messageText.trim(), repliedToId)
-        .then(sentMessage => {
-          // The socket will handle updating the store with the new message
-          setMessageText('');
-          setReplyingToMessage(null);
-          stopTyping(channelId);
-          setIsTyping(false);
-        })
-        .catch(error => {
-          Alert.alert('Error', 'Failed to send message');
-          console.error('Send message error:', error);
-        });
+      // Optimistic UI: add message to store immediately so user sees it
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        content,
+        channel: channelId,
+        channel_id: channelId,
+        author_id: userId,
+        author: {
+          id: userId,
+          username: user?.username || 'You',
+          avatar: user?.avatar || '',
+          is_online: true,
+        },
+        attachments: [],
+        reactions: [],
+        created_at: new Date().toISOString(),
+        replied_to_id: repliedToId,
+        replied_to_message: replyingToMessage ? {
+          id: replyingToMessage.id,
+          content: replyingToMessage.content,
+          author: replyingToMessage.author,
+        } : undefined,
+      } as any;
+
+      useChatStore.getState().addMessage(channelId, optimisticMessage);
+
+      // Send via socket
+      sendMessage(channelId, content, undefined, repliedToId);
+
+      // Clear input immediately
+      setMessageText('');
+      setReplyingToMessage(null);
+      stopTyping(channelId);
+      setIsTyping(false);
     }
   };
 
