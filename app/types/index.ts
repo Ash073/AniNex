@@ -186,6 +186,7 @@ export interface Post {
   created_at?: string;
   updatedAt: Date;
   updated_at?: string;
+  anime_title?: string;
 }
 
 export interface Comment {
@@ -242,6 +243,7 @@ export interface Conversation {
   };
   unreadCount?: number;
   isBlocked?: boolean;
+  _id?: string;
 }
 
 export interface DirectMessage {

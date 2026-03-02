@@ -46,9 +46,11 @@ class SocketService {
         console.log('Socket connected');
         this.isConnected = true;
         // Flush queued messages
-        while (this.messageQueue.length > 0) {
-          const msg = this.messageQueue.shift();
-          this.socket.emit('message:send', msg);
+        if (this.socket) {
+          while (this.messageQueue.length > 0) {
+            const msg = this.messageQueue.shift();
+            this.socket.emit('message:send', msg);
+          }
         }
       });
 

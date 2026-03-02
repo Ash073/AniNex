@@ -15,12 +15,12 @@ export default function ServersScreen() {
   const { user } = useAuthStore();
   const userId = user?.id || user?._id;
 
-  const { data: servers = [], isLoading, refetch } = useQuery({
+  const { data: servers = [], isLoading, refetch } = useQuery<Server[]>({
     queryKey: ['servers'],
     queryFn: serverService.getServers,
     // Keep data warm so navigating back to this tab feels instant
     staleTime: 30_000, // 30s before considering data "stale"
-    cacheTime: 5 * 60_000, // keep in cache for 5 minutes
+    gcTime: 5 * 60_000, // keep in cache for 5 minutes
   });
 
   const onRefresh = useCallback(async () => {
@@ -29,9 +29,9 @@ export default function ServersScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const myServers = servers.filter(s => {
+  const myServers = servers.filter((s: Server) => {
     // Use is_member flag from backend (most reliable)
-    if (s.is_member) return true;
+    if ((s as any).is_member) return true;
     // Fallback: Check members array if present
     if (s.members && Array.isArray(s.members)) {
       return s.members.some(m => {
@@ -44,7 +44,7 @@ export default function ServersScreen() {
     return ownerId === userId;
   });
 
-  const publicServers = servers.filter(s => {
+  const publicServers = servers.filter((s: Server) => {
     const sId = s.id || s._id;
     const isPublic = s.isPublic ?? s.is_public;
     return isPublic && !myServers.some(ms => (ms.id || ms._id) === sId);
@@ -67,7 +67,7 @@ export default function ServersScreen() {
 
   const renderServer = (item: Server) => {
     const sId = item.id || item._id;
-    const isMember = myServers.some(s => (s.id || s._id) === sId);
+    const isMember = myServers.some((s: Server) => (s.id || s._id) === sId);
     const memberCount = item.memberCount ?? item.member_count ?? 0;
     const iconUri = item.icon;
     const hasIcon = !!iconUri && !iconUri.includes('dicebear');

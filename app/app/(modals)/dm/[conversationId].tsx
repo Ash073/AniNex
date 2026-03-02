@@ -17,7 +17,6 @@ import {
   Image,
 } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { BlurView } from 'expo-blur';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

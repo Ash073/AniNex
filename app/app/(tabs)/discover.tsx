@@ -132,7 +132,7 @@ export default function DiscoverScreen() {
 
   // Derive lookup sets for fast checks
   const sentToIds = new Set(sentRequests.map((r: any) => r.receiver_id));
-  const receivedFromIds = new Map(
+  const receivedFromIds = new Map<string, string>(
     pendingRequests.map((r: any) => [r.sender_id, r.id])
   );
   const myFriendIds = new Set(currentUser?.friends || []);
