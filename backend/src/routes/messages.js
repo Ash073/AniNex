@@ -176,28 +176,31 @@ router.post('/', protect, [
     });
 
     // Notify all server members except sender
-    const { data: members } = await supabase
+    supabase
       .from('server_members')
       .select('user_id')
-      .eq('server_id', channel.server_id);
-    if (members) {
-      for (const m of members) {
-        if (m.user_id !== req.user.id) {
-          // Check if user was mentioned to avoid double notification
-          const wasMentioned = mentions.some(mnt => mnt.user_id === m.user_id);
-          if (!wasMentioned) {
-            await createNewMessageNotification(
-              m.user_id,
-              req.user,
-              { content: processedContent },
-              channelId,
-              'server_message',
-              { channelName: channel.name, serverName: server_name }
-            );
+      .eq('server_id', channel.server_id)
+      .then(({ data: members }) => {
+        if (members) {
+          for (const m of members) {
+            if (m.user_id !== req.user.id) {
+              // Check if user was mentioned to avoid double notification
+              const wasMentioned = mentions.some(mnt => mnt.user_id === m.user_id);
+              if (!wasMentioned) {
+                // Send push notification (background)
+                createNewMessageNotification(
+                  m.user_id,
+                  req.user,
+                  { content: processedContent },
+                  channelId,
+                  'server_message',
+                  { channelName: channel.name, serverName: server_name }
+                ).catch(e => console.error('Notification error:', e));
+              }
+            }
           }
         }
-      }
-    }
+      });
 
     const enriched = {
       ...message,
