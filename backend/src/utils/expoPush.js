@@ -21,6 +21,7 @@ async function sendExpoPush(pushToken, title, body, data = {}) {
     title,
     body,
     data,
+    channelId: 'default', // Required for Android to show in tray
   };
 
   const response = await fetch(EXPO_PUSH_URL, {
