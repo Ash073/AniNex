@@ -18,8 +18,24 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // ══════════════════════════════════════════════════════════
 //  UPDATE NOTES — Edit this for each new version
 // ══════════════════════════════════════════════════════════
-export const CURRENT_VERSION = '1.1.0';
+export const CURRENT_VERSION = '1.1.1';
 const STORAGE_KEY = `@animex_update_dismissed_v${CURRENT_VERSION}`;
+
+// Platform-agnostic storage helper matching authStore
+const storage = {
+    async getItem(key: string): Promise<string | null> {
+        if (Platform.OS === 'web') return localStorage.getItem(key);
+        return await SecureStore.getItemAsync(key);
+    },
+    async setItem(key: string, value: string): Promise<void> {
+        if (Platform.OS === 'web') localStorage.setItem(key, value);
+        else await SecureStore.setItemAsync(key, value);
+    },
+    async removeItem(key: string): Promise<void> {
+        if (Platform.OS === 'web') localStorage.removeItem(key);
+        else await SecureStore.deleteItemAsync(key);
+    }
+};
 
 export interface UpdateNote {
     icon: string;
@@ -32,49 +48,38 @@ export interface UpdateNote {
 
 export const UPDATE_NOTES: UpdateNote[] = [
     {
+        icon: 'sparkles',
+        iconColor: '#a855f7',
+        title: 'AI Anime Identity',
+        description: 'Discover your true anime character match! Our new AI Aura Analysis evaluates your personality and assigns you a character, rank, and power archetype during onboarding.',
+        tag: 'Main Feature',
+        tagColor: '#a855f7',
+    },
+    {
+        icon: 'notifications',
+        iconColor: '#fbbf24',
+        title: 'Premium Daily Facts',
+        description: 'Receive personalized anime facts daily via notifications with a brand-new immersive fact-viewing experience.',
+        tag: 'Improved',
+        tagColor: '#22c55e',
+    },
+    {
         icon: 'flame',
         iconColor: '#f97316',
         title: 'Streak & XP System',
         description:
-            'Gamification is here! Earn XP for being active, level up your profile, and maintain daily login streaks to unlock exclusive badges.',
-        tag: 'Major',
+            'Earn XP for being active and maintain daily login streaks to unlock exclusive badges.',
+        tag: 'New',
         tagColor: '#f97316',
-    },
-    {
-        icon: 'bulb',
-        iconColor: '#fbbf24',
-        title: 'Daily Anime Facts',
-        description:
-            'Learn something new every day with automated anime facts delivered straight to your notifications.',
-        tag: 'New',
-        tagColor: '#22c55e',
-    },
-    {
-        icon: 'people',
-        iconColor: '#6366f1',
-        title: 'Friend Activity Alerts',
-        description:
-            'Never miss a moment with your squad. Get notified as soon as your friends come online.',
-        tag: 'New',
-        tagColor: '#22c55e',
     },
     {
         icon: 'checkmark-shield',
         iconColor: '#10b981',
-        title: 'Critical Stability Fix',
+        title: 'Stability & Fixes',
         description:
-            'Resolved the "Black Screen" crash issue that occurred after the loader in some APK builds. The app is now smoother and more reliable.',
+            'Critical fix for APK black screen crashes and improved deep-linking for mentions.',
         tag: 'Fixed',
         tagColor: '#3b82f6',
-    },
-    {
-        icon: 'at',
-        iconColor: '#ec4899',
-        title: 'Mention Improvements',
-        description:
-            'Tapping a mention notification now takes you directly to the specific channel or message.',
-        tag: 'Improved',
-        tagColor: '#f59e0b',
     },
 ];
 
@@ -119,7 +124,7 @@ export default function UpdateNotesModal({ visible, onClose, permanent = true }:
         // Persist immediately if permanent
         if (permanent) {
             try {
-                await SecureStore.setItemAsync(STORAGE_KEY, 'true');
+                await storage.setItem(STORAGE_KEY, 'true');
             } catch { }
         }
 
@@ -231,7 +236,7 @@ export default function UpdateNotesModal({ visible, onClose, permanent = true }:
 // ── Check if update notes should show ──
 export async function shouldShowUpdateNotes(): Promise<boolean> {
     try {
-        const dismissed = await SecureStore.getItemAsync(STORAGE_KEY);
+        const dismissed = await storage.getItem(STORAGE_KEY);
         return dismissed !== 'true';
     } catch {
         return true;
@@ -241,7 +246,7 @@ export async function shouldShowUpdateNotes(): Promise<boolean> {
 // ── Reset dismissal (for testing) ──
 export async function resetUpdateNotes(): Promise<void> {
     try {
-        await SecureStore.deleteItemAsync(STORAGE_KEY);
+        await storage.removeItem(STORAGE_KEY);
     } catch { }
 }
 

@@ -101,6 +101,12 @@ export const authService = {
     genres: string[];
     interests: string[];
     experienceLevel: string;
+    personalityType?: string;
+    characterName?: string;
+    fandomCategory?: string;
+    powerArchetype?: string;
+    title?: string;
+    rank?: string;
   }) => {
     const { data } = await api.post('/auth/onboarding', onboardingData);
     if (data.data?.user) {

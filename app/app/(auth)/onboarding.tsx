@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, StyleSheet, Animated, ImageBackground, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, StyleSheet, Animated, ImageBackground, Image, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { ANIME_GENRES, INTERESTS, EXPERIENCE_LEVELS } from '@/constants/anime';
 import { safeGoBack } from '@/utils/navigation';
+import { identityService } from '@/features/identity/identityService';
+import { AnimeIdentity } from '@/features/identity/types';
 
 const POPULAR_ANIME = [
   { name: 'One Piece', icon: 'skull', color: '#FF6B6B' },
@@ -54,6 +56,9 @@ export default function OnboardingScreen() {
   const [genres, setGenres] = useState<string[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
   const [experienceLevel, setExperienceLevel] = useState('');
+  const [description, setDescription] = useState('');
+  const [auraResult, setAuraResult] = useState<Partial<AnimeIdentity> | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -114,22 +119,61 @@ export default function OnboardingScreen() {
       return;
     }
 
-    if (step < 4) {
+    if (step === 5 && !auraResult) {
+      if (description.length < 10) {
+        Alert.alert('Almost there!', 'Please describe yourself a bit more (10+ characters) to find your anime match.');
+        return;
+      }
+      // If they haven't analyzed yet, do it now
+      handleAnalyzeAura();
+      return;
+    }
+
+    if (step < 5) {
       setStep(step + 1);
     } else {
       handleComplete();
     }
   };
 
+  const handleAnalyzeAura = async () => {
+    if (description.length < 10) {
+      Alert.alert('Analysis Failed', 'Please describe yourself in at least 10 characters.');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const result = await identityService.analyzeDescription(description);
+      setAuraResult(result);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to analyze your aura right now. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleComplete = async () => {
     setLoading(true);
     try {
-      const response = await authService.completeOnboarding({
+      const onboardingData: any = {
         favoriteAnime,
         genres,
         interests,
-        experienceLevel
-      });
+        experienceLevel,
+      };
+
+      // Add aura results if available
+      if (auraResult) {
+        onboardingData.personalityType = auraResult.personalityType;
+        onboardingData.characterName = auraResult.characterName;
+        onboardingData.fandomCategory = auraResult.fandomCategory;
+        onboardingData.powerArchetype = auraResult.powerArchetype;
+        onboardingData.title = auraResult.title;
+        onboardingData.rank = auraResult.rank || 'Beginner';
+      }
+
+      const response = await authService.completeOnboarding(onboardingData);
       // Ensure onboardingCompleted is set to true
       setUser({ ...response.data.user, onboardingCompleted: true });
       router.replace('/home');
@@ -146,7 +190,7 @@ export default function OnboardingScreen() {
 
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
-      {[1, 2, 3, 4].map(i => (
+      {[1, 2, 3, 4, 5].map(i => (
         <View key={i} style={styles.progressStepContainer}>
           <View style={[
             styles.progressCircle,
@@ -159,7 +203,7 @@ export default function OnboardingScreen() {
               <Text style={styles.progressNumber}>{i}</Text>
             )}
           </View>
-          {i < 4 && (
+          {i < 5 && (
             <View style={[
               styles.progressLine,
               i < step && styles.progressLineActive
@@ -670,6 +714,95 @@ export default function OnboardingScreen() {
     </View>
   );
 
+  const renderStep5 = () => (
+    <View style={styles.stepContainer}>
+      <View style={styles.headerContainer}>
+        <LinearGradient
+          colors={['#6366f1', '#a855f7']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.stepIcon}
+        >
+          <Ionicons name="sparkles" size={32} color="#fff" />
+        </LinearGradient>
+        <Text style={styles.stepTitle}>Your Anime Identity</Text>
+        <Text style={styles.stepSubtitle}>Describe your personality to find your anime character match 🧠</Text>
+      </View>
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {!auraResult ? (
+          <View style={styles.descriptionSection}>
+            <Text style={styles.inputLabelLabel}>Describe yourself (personality, habits, vibes):</Text>
+            <TextInput
+              style={styles.auraTextInput}
+              multiline
+              numberOfLines={6}
+              placeholder="e.g. I am calm but tactical. I love seeing plans come together. My friends say I'm mysterious but loyal..."
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              value={description}
+              onChangeText={setDescription}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={styles.analyzeButton}
+              onPress={handleAnalyzeAura}
+              disabled={isAnalyzing || description.length < 10}
+            >
+              <LinearGradient
+                colors={description.length < 10 ? ['#4a4a4a', '#2a2a2a'] : ['#6366f1', '#a855f7']}
+                style={styles.analyzeButtonGradient}
+              >
+                {isAnalyzing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.analyzeButtonText}>Reveal My Inner Character</Text>
+                    <Ionicons name="flash" size={18} color="#fff" style={{ marginLeft: 8 }} />
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.resultCard}>
+            <LinearGradient
+              colors={['rgba(99, 102, 241, 0.15)', 'rgba(168, 85, 247, 0.1)']}
+              style={styles.resultCardInner}
+            >
+              <View style={styles.matchBadge}>
+                <Text style={styles.matchBadgeText}>PERFECT MATCH</Text>
+              </View>
+
+              <Text style={styles.characterName}>{auraResult.characterName}</Text>
+              <Text style={styles.personalityType}>{auraResult.personalityType}</Text>
+
+              <View style={styles.resultDivider} />
+
+              <View style={styles.resultGrid}>
+                <View style={styles.resultItem}>
+                  <Text style={styles.resultLabel}>Archetype</Text>
+                  <Text style={styles.resultValue}>{auraResult.powerArchetype}</Text>
+                </View>
+                <View style={styles.resultItem}>
+                  <Text style={styles.resultLabel}>Rank</Text>
+                  <Text style={styles.resultValue}>{auraResult.rank || 'Beginner'}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.changeAuraButton}
+                onPress={() => setAuraResult(null)}
+              >
+                <Text style={styles.changeAuraText}>Redo Analysis</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Top Back Button */}
@@ -693,6 +826,7 @@ export default function OnboardingScreen() {
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
+          {step === 5 && renderStep5()}
         </View>
 
         <View style={styles.buttonContainer}>
@@ -720,9 +854,9 @@ export default function OnboardingScreen() {
               style={styles.nextButtonGradient}
             >
               <Text style={styles.nextButtonText}>
-                {loading ? 'Completing...' : step === 4 ? 'Complete Setup' : 'Continue'}
+                {loading ? 'Completing...' : step === 5 ? 'Finalize My Soul' : 'Continue'}
               </Text>
-              {!loading && <Ionicons name={step === 4 ? "checkmark" : "arrow-forward"} size={20} color="#fff" />}
+              {!loading && <Ionicons name={step === 5 ? "checkmark" : "arrow-forward"} size={20} color="#fff" />}
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -1149,6 +1283,116 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
+  },
+  // Step 5 Styles
+  descriptionSection: {
+    padding: 4,
+  },
+  inputLabelLabel: {
+    color: '#8b8b8f',
+    fontSize: 14,
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  auraTextInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#fff',
+    padding: 20,
+    fontSize: 16,
+    height: 180,
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  analyzeButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  analyzeButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+  },
+  analyzeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  resultCard: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+  },
+  resultCardInner: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  matchBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  matchBadgeText: {
+    color: '#818cf8',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  characterName: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#fff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  personalityType: {
+    fontSize: 16,
+    color: '#818cf8',
+    fontWeight: '600',
+    marginBottom: 24,
+  },
+  resultDivider: {
+    width: 60,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    marginBottom: 24,
+  },
+  resultGrid: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-around',
+    marginBottom: 32,
+  },
+  resultItem: {
+    alignItems: 'center',
+  },
+  resultLabel: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  resultValue: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  changeAuraButton: {
+    padding: 10,
+  },
+  changeAuraText: {
+    color: 'rgba(255, 255, 255, 0.3)',
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   buttonContainer: {
     flexDirection: 'row',
