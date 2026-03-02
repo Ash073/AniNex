@@ -100,6 +100,7 @@ export default function LoginScreen() {
       const user = normalizeUser(JSON.parse(decodeURIComponent(params.user)));
       setUser(user);
       await setTokens(params.token, params.refreshToken);
+      setLoading(false);
       // If profile not completed or username missing, redirect to profile setup
       if (!user.profileCompleted || !user.username) {
         router.replace({
@@ -190,6 +191,7 @@ export default function LoginScreen() {
 
       setUser(response.user);
       await setTokens(response.token, response.refreshToken);
+      setLoading(false);
 
       console.log('🎯 Navigation check - onboardingCompleted:', response.user.onboardingCompleted);
       // Keep loader visible until the new screen fully mounts

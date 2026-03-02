@@ -3,7 +3,7 @@ import api from './api';
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'server_added' | 'server_approved' | 'friend_request' | 'post_like' | 'post_comment' | 'general';
+  type: 'server_added' | 'server_approved' | 'friend_request' | 'post_like' | 'post_comment' | 'general' | 'anime_fact' | 'dm' | 'server_message' | 'friend_online';
   title: string;
   body: string;
   data: Record<string, any>;

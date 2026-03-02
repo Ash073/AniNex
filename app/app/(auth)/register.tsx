@@ -114,6 +114,7 @@ export default function RegisterScreen() {
       const user = normalizeUser(JSON.parse(decodeURIComponent(params.user)));
       setUser(user);
       await setTokens(params.token, params.refreshToken);
+      setLoading(false);
       // Keep loader visible until the new screen fully mounts
       router.replace(user.onboardingCompleted ? '/home' : '/onboarding');
     } catch (error: any) {
@@ -295,6 +296,7 @@ export default function RegisterScreen() {
 
       setUser(response.user);
       await setTokens(response.token, response.refreshToken);
+      setLoading(false);
 
       // Show success modal, then navigate — loader stays visible throughout
       setShowSuccess(true);

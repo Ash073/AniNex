@@ -126,6 +126,7 @@ export default function ProfileSetupScreen() {
 
       const response = await authService.updateProfile(profileData);
       setUser(response.user);
+      setLoading(false);
       // Keep loader visible until the new screen mounts
       router.push('/add-friends');
     } catch (error: any) {

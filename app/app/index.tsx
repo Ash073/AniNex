@@ -14,18 +14,18 @@ export default function Index() {
 
   // Fully authenticated and set-up → go to home
   if (isAuthenticated && user?.onboardingCompleted && user?.profileCompleted) {
-    return <Redirect href="/(tabs)/home" />;
+    return <Redirect href="/home" />;
   }
 
   // Authenticated but onboarding/profile incomplete
   if (isAuthenticated && user?.onboardingCompleted && !user?.profileCompleted) {
-    return <Redirect href="/(auth)/profile-setup" />;
+    return <Redirect href="/profile-setup" />;
   }
 
   if (isAuthenticated && !user?.onboardingCompleted) {
-    return <Redirect href="/(auth)/onboarding" />;
+    return <Redirect href="/onboarding" />;
   }
 
   // Not authenticated → landing / welcome page
-  return <Redirect href="/(auth)/welcome" />;
+  return <Redirect href="/welcome" />;
 }

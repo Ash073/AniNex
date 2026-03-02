@@ -42,6 +42,8 @@ function notifIcon(type: string) {
       return { name: 'heart' as const, color: '#ec4899' };
     case 'post_comment':
       return { name: 'chatbubble' as const, color: '#6366f1' };
+    case 'anime_fact':
+      return { name: 'bulb' as const, color: '#fbbf24' };
     default:
       return { name: 'notifications' as const, color: '#fbbf24' };
   }
@@ -107,6 +109,11 @@ export default function NotificationsScreen() {
       router.push(`/(modals)/user-profile?userId=${notif.data.sender_id}` as any);
     } else if ((notif.type === 'post_like' || notif.type === 'post_comment') && notif.data?.post_id) {
       router.push(`/(modals)/post/${notif.data.post_id}` as any);
+    } else if (notif.type === 'anime_fact') {
+      router.push({
+        pathname: '/(modals)/anime-fact',
+        params: { fact: notif.data?.fact || notif.body },
+      } as any);
     }
   };
 
@@ -185,8 +192,8 @@ export default function NotificationsScreen() {
     <View style={ns.center}>
       <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.2)" />
       <Text style={ns.emptyText}>Failed to load notifications</Text>
-      <TouchableOpacity 
-        onPress={onRefresh} 
+      <TouchableOpacity
+        onPress={onRefresh}
         style={ns.retryButton}
         activeOpacity={0.7}
       >

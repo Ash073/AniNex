@@ -23,6 +23,7 @@ export default function ModalsLayout() {
         <Stack.Screen name="user-profile" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="anime-fact" />
       </Stack>
     </GlobalBackground>
   );

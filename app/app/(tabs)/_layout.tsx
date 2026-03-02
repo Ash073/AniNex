@@ -36,7 +36,7 @@ export default function TabsLayout() {
   if (isLoading) return null;
 
   if (!isAuthenticated || !user?.onboardingCompleted) {
-    return <Redirect href="/(auth)/welcome" />;
+    return <Redirect href="/welcome" />;
   }
 
   // Derive active tab from current path

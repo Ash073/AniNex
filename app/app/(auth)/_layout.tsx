@@ -11,19 +11,19 @@ export default function AuthLayout() {
     if (isLoading) return;
 
     if (isAuthenticated && user?.onboardingCompleted && user?.profileCompleted) {
-      if (pathname !== '/home') {
+      if (!pathname.includes('home')) {
         console.log('User fully set up, redirecting to home');
-        router.replace('/(tabs)/home');
+        router.replace('/home');
       }
     } else if (isAuthenticated && user?.onboardingCompleted && !user?.profileCompleted) {
-      if (pathname !== '/(auth)/profile-setup') {
+      if (!pathname.includes('profile-setup')) {
         console.log('User onboarded but profile not set up, redirecting to profile-setup');
-        router.replace('/(auth)/profile-setup');
+        router.replace('/profile-setup');
       }
     } else if (isAuthenticated && !user?.onboardingCompleted) {
-      if (pathname !== '/(auth)/onboarding') {
+      if (!pathname.includes('onboarding')) {
         console.log('User authenticated but not onboarded, redirecting to onboarding');
-        router.replace('/(auth)/onboarding');
+        router.replace('/onboarding');
       }
     }
   }, [isAuthenticated, isLoading, user?.onboardingCompleted, user?.profileCompleted, pathname]);

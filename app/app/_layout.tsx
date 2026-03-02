@@ -99,8 +99,11 @@ export default function RootLayout() {
       } else if (data?.type === 'friend_request') {
         router.push('/(modals)/notifications' as any);
       } else if (data?.type === 'anime_fact') {
-        // Tapping a fact takes them to the home feed
-        router.push('/(tabs)/home');
+        // Tapping a fact takes them to the dedicated modal to read the whole message
+        router.push({
+          pathname: '/(modals)/anime-fact',
+          params: { fact: (data.fact as string) || (response.notification.request.content.body as string) },
+        } as any);
       } else if (data?.type === 'friend_online' && data?.friend_id) {
         // Tapping "friend is online" takes them to that user's profile
         router.push(`/(modals)/user-profile?userId=${data.friend_id}` as any);
