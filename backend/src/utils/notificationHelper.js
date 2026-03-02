@@ -74,10 +74,11 @@ async function createNotification(userId, type, title, body, data = {}) {
     if (user && user.push_token) {
       try {
         const pushResult = await sendExpoPush(user.push_token, title, body, data, channelId);
-        if (pushResult && pushResult.data) {
-          console.log(`Expo Push Result for user ${userId} (${type}):`, pushResult.data.status);
-          if (pushResult.data.status === 'error') {
-            console.error(`Expo Error details:`, pushResult.data.message);
+        if (pushResult && pushResult.data && Array.isArray(pushResult.data) && pushResult.data.length > 0) {
+          const mainResult = pushResult.data[0];
+          console.log(`Expo Push Status for user ${userId} (${type}):`, mainResult.status);
+          if (mainResult.status === 'error') {
+            console.error(`Expo Error:`, mainResult.message || mainResult.details?.error);
           }
         }
       } catch (err) {
