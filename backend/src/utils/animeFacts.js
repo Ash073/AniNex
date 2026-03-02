@@ -67,32 +67,43 @@ const getRandomLocalFact = () => {
 };
 
 /**
- * Fetch a random fact from external API for a specific anime
+ * Fetch a random fact from external API (API Ninjas)
+ * We use this as a consistent source since specialized anime APIs are often unstable.
  */
 const fetchExternalFact = async (animeName) => {
-    if (!animeName) return null;
-
-    // Normalize anime name to find slug
-    let slug = SLUG_MAP[animeName];
-    if (!slug) {
-        // If not in map, try normalizing the name itself (lower case, spaces to underscores)
-        slug = animeName.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    // API Ninjas /facts endpoint returns general facts, but we can try to filter
+    // or just provide high quality general facts as the primary source.
+    const apiKey = process.env.ANIME_FACTS_API_KEY;
+    if (!apiKey) {
+        console.warn('ANIME_FACTS_API_KEY not set, skipping external fetch');
+        return null;
     }
 
     try {
-        const response = await fetch(`https://anime-facts-rest-api.herokuapp.com/api/v1/${slug}`, {
-            timeout: 5000 // 5 seconds timeout
+        // We try to get a fact related to the anime, or just a random interesting fact
+        const query = animeName ? `?limit=1&text=${encodeURIComponent(animeName)}` : '?limit=1';
+        const response = await fetch(`https://api.api-ninjas.com/v1/facts${query}`, {
+            headers: { 'X-Api-Key': apiKey },
+            timeout: 5000
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            // If specific search fails, try a random general fact
+            const fallbackResponse = await fetch('https://api.api-ninjas.com/v1/facts?limit=1', {
+                headers: { 'X-Api-Key': apiKey },
+                timeout: 5000
+            });
+            if (!fallbackResponse.ok) return null;
+            const fallbackData = await fallbackResponse.json();
+            return fallbackData[0]?.fact;
+        }
 
         const data = await response.json();
-        if (data && data.success && data.data && data.data.length > 0) {
-            const randomIndex = Math.floor(Math.random() * data.data.length);
-            return data.data[randomIndex].fact;
+        if (data && data.length > 0) {
+            return data[0].fact;
         }
     } catch (error) {
-        console.error(`External fact API error (${slug}):`, error.message);
+        console.error(`External fact API error (API Ninjas):`, error.message);
     }
 
     return null;

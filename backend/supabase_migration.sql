@@ -337,7 +337,7 @@ CREATE POLICY "Allow all for anon" ON join_requests FOR ALL USING (true) WITH CH
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('server_added', 'server_approved', 'friend_request', 'general')),
+  type TEXT NOT NULL CHECK (type IN ('server_added', 'server_approved', 'friend_request', 'general', 'post_like', 'post_comment', 'dm', 'server_message', 'friend_online', 'anime_fact')),
   title TEXT NOT NULL,
   body TEXT NOT NULL,
   data JSONB DEFAULT '{}',
