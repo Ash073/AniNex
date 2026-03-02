@@ -23,7 +23,6 @@ async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'defa
     data,
     channelId: channelId || 'default', // Map to Android channel
     priority: 'high',
-    _displayInForeground: true, // Internal Expo flag
   };
 
   const response = await fetch(EXPO_PUSH_URL, {

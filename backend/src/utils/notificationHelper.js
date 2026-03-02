@@ -7,7 +7,7 @@ const channelMap = {
   server_message: 'messages',
   mention: 'messages',
   friend_request: 'friend-requests',
-  anime_fact: 'messages', // Fact is also high importance
+  anime_fact: 'default', // Using default to ensure high visibility
   default: 'default'
 };
 
