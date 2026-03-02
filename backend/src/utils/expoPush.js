@@ -10,7 +10,7 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
  * @param {object} data Optional data payload
  * @returns {Promise<object>} Expo API response
  */
-async function sendExpoPush(pushToken, title, body, data = {}) {
+async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'default') {
   if (!pushToken || !pushToken.startsWith('ExponentPushToken')) {
     throw new Error('Invalid Expo push token');
   }
@@ -21,7 +21,9 @@ async function sendExpoPush(pushToken, title, body, data = {}) {
     title,
     body,
     data,
-    channelId: 'default', // Required for Android to show in tray
+    channelId: channelId || 'default', // Map to Android channel
+    priority: 'high',
+    _displayInForeground: true, // Internal Expo flag
   };
 
   const response = await fetch(EXPO_PUSH_URL, {

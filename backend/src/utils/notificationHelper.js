@@ -1,9 +1,20 @@
 const { supabase } = require('../config/supabase');
 const { sendExpoPush } = require('./expoPush');
 
+// Map notification types to Android channels (as defined in Frontend)
+const channelMap = {
+  dm: 'messages',
+  server_message: 'messages',
+  mention: 'messages',
+  friend_request: 'friend-requests',
+  anime_fact: 'messages', // Fact is also high importance
+  default: 'default'
+};
+
 // Create a notification for a user
 async function createNotification(userId, type, title, body, data = {}) {
   try {
+    const channelId = channelMap[type] || channelMap['default'];
     // Validate required parameters
     if (!userId || !type || !title || !body) {
       console.warn('Missing required notification parameters:', { userId, type, title, body });
@@ -62,7 +73,13 @@ async function createNotification(userId, type, title, body, data = {}) {
       .single();
     if (user && user.push_token) {
       try {
-        await sendExpoPush(user.push_token, title, body, data);
+        const pushResult = await sendExpoPush(user.push_token, title, body, data, channelId);
+        if (pushResult && pushResult.data) {
+          console.log(`Expo Push Result for user ${userId} (${type}):`, pushResult.data.status);
+          if (pushResult.data.status === 'error') {
+            console.error(`Expo Error details:`, pushResult.data.message);
+          }
+        }
       } catch (err) {
         console.error('Expo push error:', err);
       }

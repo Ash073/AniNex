@@ -20,7 +20,9 @@ async function sendTestFactToUser(username) {
         }
 
         if (!user.push_token) {
-            console.warn(`User ${username} has no push_token. They might not receive it on their device, but it will appear in their notifications.`);
+            console.warn(`User ${username} has no push_token. They might not receive it on their device.`);
+        } else {
+            console.log(`User Push Token: ${user.push_token}`);
         }
 
         // Fetch fact based on user preferences
