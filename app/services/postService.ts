@@ -33,6 +33,18 @@ export const postService = {
     mentions?: string[];
   }) => {
     const { data } = await api.post<{ success: boolean; data: { post: Post } }>('/posts', postData);
+
+    // Reward XP for posting (+5 XP)
+    try {
+      const { useAuthStore } = await import('@/store/authStore');
+      const { user, updateUser } = useAuthStore.getState();
+      if (user) {
+        updateUser({ xp: (user.xp || 0) + 5 });
+      }
+    } catch (err) {
+      console.warn('Failed to update local XP after post:', err);
+    }
+
     return data.data.post;
   },
 
@@ -53,6 +65,18 @@ export const postService = {
       `/posts/${postId}/comments`,
       { content, parentCommentId }
     );
+
+    // Reward XP for commenting (+3 XP)
+    try {
+      const { useAuthStore } = await import('@/store/authStore');
+      const { user, updateUser } = useAuthStore.getState();
+      if (user) {
+        updateUser({ xp: (user.xp || 0) + 3 });
+      }
+    } catch (err) {
+      console.warn('Failed to update local XP after comment:', err);
+    }
+
     return data.data.comment;
   },
 

@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/authStore';
 import { NotificationProvider } from '@/components/NotificationProvider';
 import Loader from '@/components/Loader';
+import { UpdateChecker } from '@/components/UpdateChecker';
 import {
   registerForPushNotificationsAsync,
   addNotificationListener,
@@ -132,6 +133,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <NotificationProvider>
+        <UpdateChecker />
         <StatusBar style="light" />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />

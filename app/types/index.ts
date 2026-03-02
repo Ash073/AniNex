@@ -46,6 +46,13 @@ export interface User {
   badges?: string[];
   lastLogin?: string;
   last_login?: string;
+  // Anime Identity Fields
+  personalityType?: string;
+  characterName?: string;
+  fandomCategory?: string;
+  powerArchetype?: string;
+  title?: string;
+  rank?: string;
 }
 
 export interface Server {

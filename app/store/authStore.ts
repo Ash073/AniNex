@@ -17,6 +17,8 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   hasCheckedUpdateNotes: boolean;
   setHasCheckedUpdateNotes: (checked: boolean) => void;
+  showStreakMilestone: boolean;
+  setShowStreakMilestone: (show: boolean) => void;
 }
 
 // Platform-agnostic storage helpers
@@ -50,7 +52,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
   hasCheckedUpdateNotes: false,
+  showStreakMilestone: false,
 
+  setShowStreakMilestone: (show: boolean) => set({ showStreakMilestone: show }),
   setHasCheckedUpdateNotes: (checked: boolean) => set({ hasCheckedUpdateNotes: checked }),
   setLoading: (loading) => set({ isLoading: loading }),
 
@@ -130,8 +134,44 @@ export const useAuthStore = create<AuthState>((set) => ({
                 level: raw.level || 1,
                 streak: raw.streak || 0,
                 badges: raw.badges || [],
+                personalityType: raw.personality_type || raw.personalityType,
+                characterName: raw.character_name || raw.characterName,
+                fandomCategory: raw.fandom_category || raw.fandomCategory,
+                powerArchetype: raw.power_archetype || raw.powerArchetype,
+                title: raw.title,
+                rank: raw.rank,
               };
+
               set({ user, isAuthenticated: true });
+
+              /** ── Streak & Daily XP Logic ── */
+              const today = new Date().toISOString().split('T')[0];
+              const lastLogin = raw.last_login?.split('T')[0];
+
+              if (lastLogin !== today) {
+                // Determine if streak increments or resets
+                const yesterdayDate = new Date();
+                yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+                const yesterday = yesterdayDate.toISOString().split('T')[0];
+
+                const newStreak = lastLogin === yesterday ? (user.streak || 0) + 1 : 1;
+                const newXP = (user.xp || 0) + 10; // +10 XP for daily login
+                const isMilestone = newStreak !== 0 && newStreak % 7 === 0;
+
+                // Update locally first for immediate feedback
+                set((state) => ({
+                  user: state.user ? {
+                    ...state.user,
+                    streak: newStreak,
+                    xp: newXP,
+                    lastLogin: today
+                  } : null,
+                  showStreakMilestone: isMilestone
+                }));
+
+                // Silently inform backend (OTA safe - if it fails, it's fine)
+                api.post('/auth/daily-checkin', { streak: newStreak, xp: newXP }).catch(() => { });
+              }
             }
           } catch (fetchErr) {
             console.warn('Could not fetch user profile – token may be expired');
