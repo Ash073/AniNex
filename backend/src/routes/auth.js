@@ -281,17 +281,37 @@ router.post('/onboarding', protect, [
   validate
 ], async (req, res) => {
   try {
-    const { favoriteAnime, genres, interests, experienceLevel } = req.body;
+    const {
+      favoriteAnime,
+      genres,
+      interests,
+      experienceLevel,
+      personalityType,
+      characterName,
+      fandomCategory,
+      powerArchetype,
+      title,
+      rank
+    } = req.body;
+
+    const updates = {
+      favorite_anime: favoriteAnime,
+      genres: genres,
+      interests: interests,
+      experience_level: experienceLevel,
+      onboarding_completed: true
+    };
+
+    if (personalityType) updates.personality_type = personalityType;
+    if (characterName) updates.character_name = characterName;
+    if (fandomCategory) updates.fandom_category = fandomCategory;
+    if (powerArchetype) updates.power_archetype = powerArchetype;
+    if (title) updates.title = title;
+    if (rank) updates.rank = rank;
 
     const { data: user, error } = await supabase
       .from('users')
-      .update({
-        favorite_anime: favoriteAnime,
-        genres: genres,
-        interests: interests,
-        experience_level: experienceLevel,
-        onboarding_completed: true
-      })
+      .update(updates)
       .eq('id', req.user.id)
       .select()
       .single();

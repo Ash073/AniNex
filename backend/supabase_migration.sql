@@ -26,6 +26,21 @@ CREATE TABLE IF NOT EXISTS users (
   interests TEXT[] DEFAULT '{}',
   experience_level TEXT DEFAULT 'casual' CHECK (experience_level IN ('casual', 'moderate', 'hardcore')),
   
+  -- Anime Identity (AI-driven persona)
+  personality_type TEXT,
+  character_name TEXT,
+  fandom_category TEXT,
+  power_archetype TEXT,
+  title TEXT,
+  rank TEXT,
+
+  -- User Progress
+  xp INTEGER DEFAULT 0,
+  level INTEGER DEFAULT 1,
+  streak INTEGER DEFAULT 0,
+  last_login TIMESTAMPTZ,
+  badges JSONB DEFAULT '[]'::jsonb,
+
   -- Social (arrays of user UUIDs)
   servers UUID[] DEFAULT '{}',
   friends UUID[] DEFAULT '{}',
@@ -38,6 +53,7 @@ CREATE TABLE IF NOT EXISTS users (
   profile_completed BOOLEAN DEFAULT FALSE,
   is_online BOOLEAN DEFAULT FALSE,
   last_seen TIMESTAMPTZ DEFAULT NOW(),
+  push_token TEXT,
   
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
