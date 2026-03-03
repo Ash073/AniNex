@@ -15,6 +15,10 @@ const channelMap = {
 async function createNotification(userId, type, title, body, data = {}) {
   try {
     const channelId = channelMap[type] || channelMap['default'];
+
+    // Ensure the data payload includes the type for frontend routing logic
+    const finalData = { ...(data || {}), type };
+
     // Validate required parameters
     if (!userId || !type || !title || !body) {
       console.warn('Missing required notification parameters:', { userId, type, title, body });
@@ -40,7 +44,7 @@ async function createNotification(userId, type, title, body, data = {}) {
         type,
         title,
         body,
-        data: data || {},
+        data: finalData,
         is_read: false,
         created_at: new Date().toISOString()
       })
@@ -60,7 +64,7 @@ async function createNotification(userId, type, title, body, data = {}) {
         type,
         title,
         body,
-        data: data || {},
+        data: finalData,
         created_at: notification.created_at
       });
     }
@@ -73,7 +77,7 @@ async function createNotification(userId, type, title, body, data = {}) {
       .single();
     if (user && user.push_token) {
       try {
-        const pushResult = await sendExpoPush(user.push_token, title, body, data, channelId);
+        const pushResult = await sendExpoPush(user.push_token, title, body, finalData, channelId);
         if (pushResult && pushResult.data && Array.isArray(pushResult.data) && pushResult.data.length > 0) {
           const mainResult = pushResult.data[0];
           console.log(`Expo Push Status for user ${userId} (${type}):`, mainResult.status);
