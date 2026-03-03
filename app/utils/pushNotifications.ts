@@ -3,84 +3,110 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// Configure how notifications appear when app is in foreground
+/**
+ * Configure how notifications should be handled when the app is in the foreground.
+ * IMPORTANT: By returning shouldShowAlert: true, we tell the OS to show a system notification
+ * even when the app is open.
+ */
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  // Set up Android notification channel first (required for Android 8+)
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#6366f1',
-    });
-  }
-
-  if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
-    return null;
-  }
-
-  try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
-      return null;
-    }
-
-    // Get the Expo push token
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId ??
-      'fbb8db22-e484-4526-add1-fe80a4fbcdb5'; // Fallback to the one in app.json
-
-    if (!projectId) {
-      console.error('Project ID not found');
-      return null;
-    }
-
-    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log('Expo Push Token Registered:', token);
-    return token;
-  } catch (error) {
-    console.error('Error in push notification registration:', error);
-    return null;
-  }
+/**
+ * Initialize Android Channels immediately on module load.
+ * This ensures the channels exist even before registration.
+ */
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'Default',
+    description: 'General notifications from AniNeX',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#6366f1',
+    showBadge: true,
+    enableVibration: true,
+    enableLights: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
 }
 
-export function addNotificationListener(listener: (notification: Notifications.Notification) => void) {
+/**
+ * Main function to register for push notifications.
+ * It handles permissions, Android channel setup, and retrieves the Expo Push Token.
+ */
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
+  let token: string | null = null;
+
+  // 1. Physical device check
+  if (!Device.isDevice) {
+    console.warn('Push notifications require a physical device');
+    return null;
+  }
+
+  // 2. Permission handling
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') {
+    console.warn('Failed to get notification permissions!');
+    return null;
+  }
+
+  // 3. Project ID retrieval (required for Expo Push Token)
+  const projectId =
+    Constants?.expoConfig?.extra?.eas?.projectId ??
+    Constants?.easConfig?.projectId ??
+    'fbb8db22-e484-4526-add1-fe80a4fbcdb5';
+
+  if (!projectId) {
+    console.error('Project ID not found in Expo configuration');
+    return null;
+  }
+
+  // 4. Get the token
+  try {
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    console.log('Push notification mapping successful:', token);
+  } catch (error) {
+    console.error('Error fetching Expo Push Token:', error);
+  }
+
+  return token;
+}
+
+/**
+ * Notification Listeners
+ */
+export function addNotificationReceivedListener(listener: (notification: Notifications.Notification) => void) {
   return Notifications.addNotificationReceivedListener(listener);
 }
 
-export function addNotificationResponseListener(listener: (response: Notifications.NotificationResponse) => void) {
+export function addNotificationResponseReceivedListener(listener: (response: Notifications.NotificationResponse) => void) {
   return Notifications.addNotificationResponseReceivedListener(listener);
 }
 
 /**
- * Schedule a local notification (useful for testing)
+ * Manually trigger a local notification (Tray Test)
  */
-export async function scheduleLocalNotification(title: string, body: string, data?: Record<string, any>) {
-  await Notifications.scheduleNotificationAsync({
+export async function scheduleLocalNotification(title: string, body: string, data: any = {}) {
+  return await Notifications.scheduleNotificationAsync({
     content: {
       title,
       body,
-      data: data || {},
+      data,
       sound: 'default',
     },
-    trigger: null, // Immediate
+    trigger: null,
   });
 }

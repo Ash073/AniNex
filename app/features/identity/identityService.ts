@@ -9,10 +9,18 @@ export const identityService = {
     analyzeDescription: async (description: string): Promise<Partial<AnimeIdentity>> => {
         try {
             // Expect structured JSON or default fallback
-            const { data } = await api.post('/api/analyze-personality', { description });
+            const { data } = await api.post('/users/analyze-personality', { description });
 
             if (data?.success && data?.data) {
-                return data.data;
+                const result = data.data;
+                return {
+                    personalityType: result.personality_type || 'Unknown Type',
+                    characterName: result.character_match || 'Unknown Character',
+                    fandomCategory: result.fandom_category || 'General Anime',
+                    powerArchetype: result.power_archetype || 'Base Power',
+                    title: result.motivational_title || 'Novice',
+                    rank: result.starting_rank || 'Beginner'
+                };
             }
 
             // Handle the case where the API response might be direct

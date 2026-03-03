@@ -1,18 +1,12 @@
-import { useEffect, useRef } from 'react';
-import { Stack, SplashScreen, router } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, SplashScreen } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/authStore';
 import { NotificationProvider } from '@/components/NotificationProvider';
 import Loader from '@/components/Loader';
 import { UpdateChecker } from '@/components/UpdateChecker';
-import {
-  registerForPushNotificationsAsync,
-  addNotificationListener,
-  addNotificationResponseListener,
-} from '@/utils/pushNotifications';
-import api from '@/services/api';
-import { NotificationHandler } from '@/components/NotificationHandler';
+import { useNotifications } from '@/hooks/useNotifications';
 
 import {
   useFonts,
@@ -27,10 +21,13 @@ const queryClient = new QueryClient();
 // Keep the splash screen visible while loading auth
 SplashScreen.preventAutoHideAsync();
 
+function NotificationSetup() {
+  useNotifications();
+  return null;
+}
+
 export default function RootLayout() {
-  const { loadAuth, isLoading: isAuthLoading, user } = useAuthStore();
-  const notificationListener = useRef<{ remove: () => void } | null>(null);
-  const responseListener = useRef<{ remove: () => void } | null>(null);
+  const { loadAuth, isLoading: isAuthLoading } = useAuthStore();
 
   const [fontsLoaded] = useFonts({
     Oswald_400Regular,
@@ -47,84 +44,6 @@ export default function RootLayout() {
     }
   }, [loadAuth, fontsLoaded]);
 
-  // Push notification setup — runs when user is logged in
-  useEffect(() => {
-    if (!user?.id) return;
-
-    // Register for push notifications and send token to backend
-    async function setupPushNotifications() {
-      try {
-        const token = await registerForPushNotificationsAsync();
-        if (token) {
-          console.log('Registering push token with backend:', token);
-          await api.post('/users/push-token', { token }).catch((err: any) => {
-            console.error('Failed to register push token with backend:', err?.message);
-          });
-        }
-      } catch (error) {
-        console.error('Push notification setup error:', error);
-      }
-    }
-
-    setupPushNotifications();
-
-    // Handle notification taps (user tapped on notification)
-    responseListener.current = addNotificationResponseListener((response) => {
-      const data = response.notification.request.content.data;
-      console.log('Notification tapped, data:', data);
-
-      // Navigate based on notification type
-      if (data?.type === 'dm' && data?.conversationId) {
-        router.push({
-          pathname: '/(modals)/dm/[conversationId]',
-          params: {
-            conversationId: data.conversationId as string,
-            name: (data.senderName as string) || 'User',
-            avatar: (data.senderAvatar as string) || '',
-          },
-        } as any);
-      } else if (data?.type === 'server_message' && data?.channelId) {
-        router.push({
-          pathname: '/(modals)/chat/[channelId]',
-          params: {
-            channelId: data.channelId as string,
-            channelName: (data.channelName as string) || 'general',
-            serverName: (data.serverName as string) || 'Server',
-          },
-        } as any);
-      } else if (data?.type === 'friend_request') {
-        router.push('/(modals)/notifications' as any);
-      } else if (data?.type === 'anime_fact') {
-        // Tapping a fact takes them to the dedicated modal to read the whole message
-        router.push({
-          pathname: '/(modals)/anime-fact',
-          params: { fact: (data.fact as string) || (response.notification.request.content.body as string) },
-        } as any);
-      } else if (data?.type === 'friend_online' && data?.friend_id) {
-        // Tapping "friend is online" takes them to that user's profile
-        router.push(`/(modals)/user-profile?userId=${data.friend_id}` as any);
-      } else if (data?.type === 'mention' && data?.channelId) {
-        // Tapping a mention takes them to the channel
-        router.push({
-          pathname: '/(modals)/chat/[channelId]',
-          params: { channelId: data.channelId as string },
-        } as any);
-      } else if (data?.type === 'post_like' || data?.type === 'post_comment') {
-        // Tapping post interactions takes them to the post
-        if (data?.post_id) router.push(`/(modals)/post/${data.post_id}`);
-      }
-    });
-
-    return () => {
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
-    };
-  }, [user?.id]);
-
   if (!fontsLoaded || isAuthLoading) {
     return <Loader />;
   }
@@ -132,7 +51,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <NotificationProvider>
-        <NotificationHandler />
+        <NotificationSetup />
         <UpdateChecker />
         <StatusBar style="light" />
         <Stack screenOptions={{ headerShown: false }}>
