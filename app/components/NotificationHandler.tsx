@@ -41,6 +41,11 @@ export const NotificationHandler = () => {
                             pathname: '/(modals)/anime-fact',
                             params: { fact: (data.fact as string) || body || '' }
                         } as any);
+                    } else if (data?.type === 'mention' && data?.channelId) {
+                        router.push({
+                            pathname: '/(modals)/chat/[channelId]',
+                            params: { channelId: data.channelId as string }
+                        } as any);
                     }
                 }
             });
