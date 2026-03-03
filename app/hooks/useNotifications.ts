@@ -40,11 +40,18 @@ export const useNotifications = () => {
         setup();
 
         // ─── 2. FOREGROUND LISTENER ───
-        // Fired when notification is received while app is OPEN
+        // Fired when notification is received while app is OPEN.
+        // Socket handlers (useSocket) already show in-app toasts for real-time events,
+        // so we only show a toast here for push-only types that have no socket counterpart.
         notificationListener.current = addNotificationReceivedListener((notification) => {
             const { title, body, data } = notification.request.content;
+            const type = data?.type as string;
 
-            // We show our custom in-app toast
+            // Types already handled by socket-based toasts in useSocket — skip to avoid duplicate
+            const socketHandledTypes = ['dm', 'server_message', 'friend_request', 'post_like', 'post_comment', 'server_added', 'friend_online'];
+            if (type && socketHandledTypes.includes(type)) return;
+
+            // For push-only types (e.g. anime_fact from daily cron), show the toast
             showNotification({
                 title: title || 'New Notification',
                 body: body || '',

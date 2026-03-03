@@ -10,11 +10,11 @@ import { Platform } from 'react-native';
  */
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowAlert: false,   // In-app toasts (via socket) handle foreground UX; prevent duplicate OS banner
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
+    shouldShowBanner: false,  // Same reason as shouldShowAlert
+    shouldShowList: true,     // Keep in notification center for later reference
   }),
 });
 
@@ -30,7 +30,7 @@ if (Platform.OS === 'android') {
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#6366f1',
     showBadge: true,
-    enableVibration: true,
+    enableVibrate: true,
     enableLights: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
@@ -107,6 +107,6 @@ export async function scheduleLocalNotification(title: string, body: string, dat
       data,
       sound: 'default',
     },
-    trigger: null,
+    trigger: null as any,  // Immediate delivery; typed as any for SDK 54 compat
   });
 }

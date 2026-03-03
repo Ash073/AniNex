@@ -14,6 +14,7 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
  */
 async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'default') {
   if (!pushToken || !pushToken.startsWith('ExponentPushToken')) {
+    console.warn('[ExpoPush] Skipping invalid token format:', pushToken?.substring(0, 20));
     return { success: false, error: 'Invalid token format' };
   }
 
@@ -55,6 +56,21 @@ async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'defa
       const { status, message: errMsg, details } = result.data[0];
       if (status === 'error') {
         console.error(`[ExpoPush] Delivery failed for ${pushToken}:`, errMsg, details);
+
+        // If token is no longer valid, remove it from the database to prevent future failures
+        if (details?.error === 'DeviceNotRegistered' || details?.error === 'InvalidCredentials') {
+          console.warn(`[ExpoPush] Token invalidated (${details.error}), clearing from DB...`);
+          try {
+            const { supabase } = require('../config/supabase');
+            await supabase
+              .from('users')
+              .update({ push_token: null })
+              .eq('push_token', pushToken);
+            console.log('[ExpoPush] Stale token cleared successfully');
+          } catch (cleanupErr) {
+            console.error('[ExpoPush] Failed to clear stale token:', cleanupErr.message);
+          }
+        }
       } else {
         console.log(`[ExpoPush] Successfully queued! ID: ${result.data[0].id}`);
       }

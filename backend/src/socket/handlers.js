@@ -280,18 +280,12 @@ const setupSocketHandlers = (io) => {
 
         const attachments = image_url ? [{ url: image_url, type: 'image' }] : [];
 
-        // Send push notification using unified helper
+        // Send push notification only for @mentioned users (not all members)
         const { createNewMessageNotification } = require('../utils/notificationHelper');
-        const { data: members } = await supabase
-          .from('server_members')
-          .select('user_id')
-          .eq('server_id', channel.server_id)
-          .neq('user_id', socket.userId);
-
-        if (members) {
-          for (const m of members) {
+        if (mentions.length > 0) {
+          for (const mention of mentions) {
             createNewMessageNotification(
-              m.user_id,
+              mention.user_id,
               socket.user,
               { content: content || 'Shared an image' },
               channelId,

@@ -6,7 +6,6 @@ import { Message, DirectMessage } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNotification } from '@/components/NotificationProvider';
-import { scheduleLocalNotification } from '@/utils/pushNotifications';
 import api from '@/services/api';
 
 // Module-level flag to prevent duplicate listener registration
@@ -139,14 +138,6 @@ export const useSocket = () => {
           body,
           avatar: senderAvatar,
         });
-
-        // Also schedule a device push notification (shows in notification tray)
-        scheduleLocalNotification(senderName, body, {
-          type: 'dm',
-          conversationId: payload?.conversationId,
-          senderName,
-          senderAvatar,
-        });
       }
     };
 
@@ -164,15 +155,6 @@ export const useSocket = () => {
           body,
           avatar: authorAvatar,
         });
-
-        // Also schedule a device push notification
-        const channelId = message.channel || (message as any).channel_id;
-        scheduleLocalNotification(`${authorName} in server`, body, {
-          type: 'server_message',
-          channelId,
-          channelName: (message as any).channelName,
-          serverName: (message as any).serverName,
-        });
       }
     };
 
@@ -189,11 +171,6 @@ export const useSocket = () => {
         title: 'Added to Server',
         body: `${addedBy} added you to "${serverName}"`,
       });
-
-      scheduleLocalNotification('Added to Server', `${addedBy} added you to "${serverName}"`, {
-        type: 'server_added',
-        serverId: payload?.serverId,
-      });
     };
 
     // ── Real-time notifications (friend requests, likes, comments, etc.) ──
@@ -201,19 +178,18 @@ export const useSocket = () => {
       queryClient?.invalidateQueries({ queryKey: ['notifications'] });
       queryClient?.invalidateQueries({ queryKey: ['notification-count'] });
 
+      const type = payload?.type || payload?.data?.type || 'general';
+
+      // Skip toast for types already handled by dedicated socket handlers above
+      // to prevent duplicate in-app toasts
+      if (type === 'dm' || type === 'server_message') return;
+
       const title = payload?.title || 'New Notification';
       const body = payload?.body || '';
-      const type = payload?.type || 'general';
 
       notify({
         title,
         body,
-      });
-
-      // Schedule a device push notification for the system tray
-      scheduleLocalNotification(title, body, {
-        type,
-        ...(payload?.data || {}),
       });
     };
 
@@ -229,6 +205,7 @@ export const useSocket = () => {
       socketService.on('user:status', handleUserStatus);
       socketService.on('server:added', handleServerAdded);
       socketService.on('notification:new', handleNotificationNew);
+      socketService.on('dm:reaction', handleDMReaction);
     }
 
     // ── AppState tracking for online/offline ──
@@ -262,6 +239,7 @@ export const useSocket = () => {
         socketService.off('user:status', handleUserStatus);
         socketService.off('server:added', handleServerAdded);
         socketService.off('notification:new', handleNotificationNew);
+        socketService.off('dm:reaction', handleDMReaction);
         listenersRegisteredBy = null;
       }
       subscription.remove();
