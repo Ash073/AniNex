@@ -6,6 +6,7 @@ import { Message, DirectMessage } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNotification } from '@/components/NotificationProvider';
+import { markNotificationShown } from '@/utils/pushNotifications';
 import api from '@/services/api';
 
 // Module-level flag to prevent duplicate listener registration
@@ -133,6 +134,10 @@ export const useSocket = () => {
         const senderName = msg.sender?.username || msg.sender?.display_name || 'Someone';
         const senderAvatar = msg.sender?.avatar;
         const body = msg.image_url ? '📷 Sent an image' : (msg.content || 'New message');
+
+        // Mark as shown so the push handler skips the duplicate OS banner
+        markNotificationShown('dm');
+
         notify({
           title: senderName,
           body,
@@ -150,6 +155,10 @@ export const useSocket = () => {
         const authorAvatar = message.author?.avatar;
         const hasImage = (message.attachments || []).some((a: any) => a.type === 'image');
         const body = hasImage ? '📷 Sent an image' : (message.content || 'New message');
+
+        // Mark as shown so the push handler skips the duplicate OS banner
+        markNotificationShown('server_message');
+
         notify({
           title: authorName,
           body,
@@ -167,6 +176,9 @@ export const useSocket = () => {
 
       const serverName = payload?.serverName || 'a server';
       const addedBy = payload?.addedBy || 'Someone';
+
+      markNotificationShown('server_added');
+
       notify({
         title: 'Added to Server',
         body: `${addedBy} added you to "${serverName}"`,
@@ -180,12 +192,14 @@ export const useSocket = () => {
 
       const type = payload?.type || payload?.data?.type || 'general';
 
-      // Skip toast for types already handled by dedicated socket handlers above
-      // to prevent duplicate in-app toasts
+      // DM and server_message have dedicated socket handlers above — skip to avoid double toast
       if (type === 'dm' || type === 'server_message') return;
 
       const title = payload?.title || 'New Notification';
       const body = payload?.body || '';
+
+      // Mark so the push handler can skip OS banner
+      markNotificationShown(type);
 
       notify({
         title,

@@ -1,20 +1,22 @@
 import { useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useNotification } from '@/components/NotificationProvider';
 import {
     registerForPushNotificationsAsync,
     addNotificationReceivedListener,
-    addNotificationResponseReceivedListener
+    addNotificationResponseReceivedListener,
+    wasRecentlyShown,
 } from '@/utils/pushNotifications';
 import api from '@/services/api';
 
 /**
- * Centralized hook to manage all notification-related logic:
- * 1. Token registration
- * 2. Foreground listening (toasts)
- * 3. Background/Tap listening (navigation)
+ * Centralized hook for push notification management:
+ *
+ *   1. Token registration  — registers Expo push token with backend on login
+ *   2. Foreground listener  — shows in-app toast for push notifications
+ *                              (skips if socket toast already showed it — dedup)
+ *   3. Tap / response listener — navigates when user taps a notification
  */
 export const useNotifications = () => {
     const { user } = useAuthStore();
@@ -25,13 +27,13 @@ export const useNotifications = () => {
     useEffect(() => {
         if (!user?.id) return;
 
-        // ─── 1. REGISTER FOR PUSH ───
+        // ─── 1. REGISTER PUSH TOKEN ───
         const setup = async () => {
             try {
                 const token = await registerForPushNotificationsAsync();
                 if (token) {
                     await api.post('/users/push-token', { token });
-                    console.log('[Notifications] Registered token with backend');
+                    console.log('[Notifications] Token registered with backend');
                 }
             } catch (err) {
                 console.error('[Notifications] Registration failed', err);
@@ -39,29 +41,33 @@ export const useNotifications = () => {
         };
         setup();
 
-        // ─── 2. FOREGROUND LISTENER ───
-        // Fired when notification is received while app is OPEN.
-        // Socket handlers (useSocket) already show in-app toasts for real-time events,
-        // so we only show a toast here for push-only types that have no socket counterpart.
+        // ─── 2. FOREGROUND PUSH LISTENER ───
+        // Fires when a push notification arrives while the app is OPEN.
+        // The socket-based toast in useSocket.ts marks notifications via
+        // markNotificationShown(). If that already fired, we skip the toast
+        // here to avoid duplicates. If socket was slow or disconnected,
+        // this acts as the fallback and shows the toast.
         notificationListener.current = addNotificationReceivedListener((notification) => {
             const { title, body, data } = notification.request.content;
-            const type = data?.type as string;
+            const dedupKey = (data as any)?.notificationId || (data as any)?.type || '';
 
-            // Types already handled by socket-based toasts in useSocket — skip to avoid duplicate
-            const socketHandledTypes = ['dm', 'server_message', 'friend_request', 'post_like', 'post_comment', 'server_added', 'friend_online'];
-            if (type && socketHandledTypes.includes(type)) return;
+            // If socket already showed a toast for this, skip
+            if (dedupKey && wasRecentlyShown(dedupKey)) {
+                console.log('[Notifications] Skipping duplicate foreground toast:', dedupKey);
+                return;
+            }
 
-            // For push-only types (e.g. anime_fact from daily cron), show the toast
+            // Show in-app toast
             showNotification({
                 title: title || 'New Notification',
                 body: body || '',
-                avatar: data?.senderAvatar as string,
+                avatar: (data as any)?.senderAvatar as string,
                 onPress: () => handleNotificationRouting(data, body),
             });
         });
 
-        // ─── 3. RESPONSE LISTENER ───
-        // Fired when user TAPS on a notification (foreground or background)
+        // ─── 3. TAP / RESPONSE LISTENER ───
+        // Fires when user TAPS a notification (foreground, background, or killed)
         responseListener.current = addNotificationResponseReceivedListener((response) => {
             const { data, body } = response.notification.request.content;
             console.log('[Notifications] User tapped notification:', data);
@@ -75,7 +81,7 @@ export const useNotifications = () => {
     }, [user?.id]);
 
     /**
-     * Unified routing logic for all notification types
+     * Route user to the correct screen based on notification type
      */
     const handleNotificationRouting = (data: any, body?: string | null) => {
         if (!data) return;
@@ -135,7 +141,7 @@ export const useNotifications = () => {
                 break;
 
             default:
-                console.warn('[Notifications] Unhandled notification type:', type);
+                console.warn('[Notifications] Unhandled type:', type);
                 break;
         }
     };

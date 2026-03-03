@@ -3,25 +3,55 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-/**
- * Configure how notifications should be handled when the app is in the foreground.
- * IMPORTANT: By returning shouldShowAlert: true, we tell the OS to show a system notification
- * even when the app is open.
- */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: false,   // In-app toasts (via socket) handle foreground UX; prevent duplicate OS banner
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: false,  // Same reason as shouldShowAlert
-    shouldShowList: true,     // Keep in notification center for later reference
-  }),
-});
+// ─────────────────────────────────────────────────────────────
+//  NOTIFICATION DEDUP — prevents the same notification showing
+//  twice when both socket toast AND push banner arrive together.
+// ─────────────────────────────────────────────────────────────
+const recentlyShownIds = new Set<string>();
+const DEDUP_WINDOW_MS = 3000;
 
 /**
- * Initialize Android Channels immediately on module load.
- * This ensures the channels exist even before registration.
+ * Mark a notification key as "already shown" so the push handler
+ * can suppress the duplicate OS banner.
+ * Call this from useSocket whenever a socket-based toast is displayed.
  */
+export function markNotificationShown(key: string) {
+  recentlyShownIds.add(key);
+  setTimeout(() => recentlyShownIds.delete(key), DEDUP_WINDOW_MS);
+}
+
+/** Check whether this notification was already shown via socket toast. */
+export function wasRecentlyShown(key: string): boolean {
+  return recentlyShownIds.has(key);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FOREGROUND HANDLER
+//  Decides how the OS treats a push that arrives while app is open.
+//
+//  Strategy: ALWAYS show the OS banner UNLESS the same notification
+//  was already displayed as an in-app socket toast (dedup).
+//  This guarantees notifications show even if socket is down.
+// ─────────────────────────────────────────────────────────────
+Notifications.setNotificationHandler({
+  handleNotification: async (notification) => {
+    const data = (notification.request.content.data || {}) as Record<string, any>;
+    const dedupKey = String(data?.notificationId || data?.type || '');
+    const alreadyShown = dedupKey ? wasRecentlyShown(dedupKey) : false;
+
+    return {
+      shouldShowAlert: !alreadyShown,
+      shouldPlaySound: !alreadyShown,
+      shouldSetBadge: true,
+      shouldShowBanner: !alreadyShown,
+      shouldShowList: true,
+    };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────
+//  ANDROID NOTIFICATION CHANNEL
+// ─────────────────────────────────────────────────────────────
 if (Platform.OS === 'android') {
   Notifications.setNotificationChannelAsync('default', {
     name: 'Default',
@@ -36,20 +66,17 @@ if (Platform.OS === 'android') {
   });
 }
 
-/**
- * Main function to register for push notifications.
- * It handles permissions, Android channel setup, and retrieves the Expo Push Token.
- */
+// ─────────────────────────────────────────────────────────────
+//  TOKEN REGISTRATION
+// ─────────────────────────────────────────────────────────────
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token: string | null = null;
 
-  // 1. Physical device check
   if (!Device.isDevice) {
-    console.warn('Push notifications require a physical device');
+    console.warn('[Push] Notifications require a physical device');
     return null;
   }
 
-  // 2. Permission handling
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -59,54 +86,55 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   if (finalStatus !== 'granted') {
-    console.warn('Failed to get notification permissions!');
+    console.warn('[Push] Permission not granted');
     return null;
   }
 
-  // 3. Project ID retrieval (required for Expo Push Token)
   const projectId =
     Constants?.expoConfig?.extra?.eas?.projectId ??
     Constants?.easConfig?.projectId ??
     'fbb8db22-e484-4526-add1-fe80a4fbcdb5';
 
   if (!projectId) {
-    console.error('Project ID not found in Expo configuration');
+    console.error('[Push] Project ID not found');
     return null;
   }
 
-  // 4. Get the token
   try {
     token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log('Push notification mapping successful:', token);
+    console.log('[Push] Token acquired:', token);
   } catch (error) {
-    console.error('Error fetching Expo Push Token:', error);
+    console.error('[Push] Token error:', error);
   }
 
   return token;
 }
 
-/**
- * Notification Listeners
- */
-export function addNotificationReceivedListener(listener: (notification: Notifications.Notification) => void) {
+// ─────────────────────────────────────────────────────────────
+//  LISTENERS
+// ─────────────────────────────────────────────────────────────
+export function addNotificationReceivedListener(
+  listener: (notification: Notifications.Notification) => void,
+) {
   return Notifications.addNotificationReceivedListener(listener);
 }
 
-export function addNotificationResponseReceivedListener(listener: (response: Notifications.NotificationResponse) => void) {
+export function addNotificationResponseReceivedListener(
+  listener: (response: Notifications.NotificationResponse) => void,
+) {
   return Notifications.addNotificationResponseReceivedListener(listener);
 }
 
-/**
- * Manually trigger a local notification (Tray Test)
- */
-export async function scheduleLocalNotification(title: string, body: string, data: any = {}) {
+// ─────────────────────────────────────────────────────────────
+//  LOCAL NOTIFICATION (fallback / testing)
+// ─────────────────────────────────────────────────────────────
+export async function scheduleLocalNotification(
+  title: string,
+  body: string,
+  data: any = {},
+) {
   return await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      data,
-      sound: 'default',
-    },
-    trigger: null as any,  // Immediate delivery; typed as any for SDK 54 compat
+    content: { title, body, data, sound: 'default' },
+    trigger: null as any,
   });
 }
