@@ -3,6 +3,8 @@ const router = express.Router();
 const { supabase } = require('../config/supabase');
 const { protect } = require('../middleware/auth');
 
+const { analyzePersonality } = require('../utils/personalityAI');
+
 // POST /api/users/push-token
 router.post('/push-token', protect, async (req, res) => {
   const { token } = req.body;
@@ -15,6 +17,36 @@ router.post('/push-token', protect, async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
   res.json({ success: true });
+});
+
+/**
+ * @route   POST /api/users/analyze-personality
+ * @desc    Get anime archetype analysis based on self-description
+ * @access  Private
+ */
+router.post('/analyze-personality', protect, async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description || description.trim().length < 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a more detailed description (min 5 characters).'
+      });
+    }
+
+    const analysis = await analyzePersonality(description);
+
+    res.json({
+      success: true,
+      data: analysis
+    });
+  } catch (error) {
+    console.error('Personality Analysis Route Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'AI Analysis failed'
+    });
+  }
 });
 
 // @route   GET /api/users/search

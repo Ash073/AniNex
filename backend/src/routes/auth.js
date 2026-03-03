@@ -329,6 +329,55 @@ router.post('/onboarding', protect, [
   }
 });
 
+// @route   POST /api/auth/profile/:userId/identity
+router.post('/profile/:userId/identity', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const {
+      personalityType,
+      characterName,
+      fandomCategory,
+      powerArchetype,
+      title,
+      rank,
+      xp
+    } = req.body;
+
+    // Security: Only allow users to update their own identity (unless admin)
+    if (req.user.id !== userId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const updates = {
+      personality_type: personalityType,
+      character_name: characterName,
+      fandom_category: fandomCategory,
+      power_archetype: powerArchetype,
+      title: title,
+      rank: rank,
+      profile_completed: true
+    };
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+
+    res.json({
+      success: true,
+      data: { user: sanitizeUser(user) }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // @route   GET /api/auth/me
 router.get('/me', protect, async (req, res) => {
   res.json({

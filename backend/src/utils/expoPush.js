@@ -3,26 +3,24 @@ const fetch = require('node-fetch');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 /**
- * Send a push notification to a device using Expo's API 🎌
- * Following the style of "Test Local Tray" for simplicity and robustness.
+ * Send a push notification via Expo API 🎌
+ * Optimized for maximum deliverability when the app is closed.
  * 
- * @param {string} pushToken Expo push token (starts with 'ExponentPushToken')
- * @param {string} title Notification title
- * @param {string} body Notification body
- * @param {object} data Optional data payload (used for routing/logic)
- * @param {string} channelId Android notification channel ID
- * @returns {Promise<object>} Expo API response
+ * @param {string} pushToken 
+ * @param {string} title 
+ * @param {string} body 
+ * @param {object} data 
+ * @param {string} channelId 
  */
 async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'default') {
   if (!pushToken || !pushToken.startsWith('ExponentPushToken')) {
-    console.warn(`[ExpoPush] Invalid token: ${pushToken}`);
-    return { success: false, error: 'Invalid Expo push token' };
+    return { success: false, error: 'Invalid token format' };
   }
 
-  // Ensure data has the minimal expected structure
   const finalData = {
     ...data,
-    _displayInForeground: true, // Hint for some older handlers
+    _displayInForeground: true, // Legacy compatibility
+    _contentAvailable: true,   // Wake up iOS apps
   };
 
   const message = {
@@ -34,6 +32,10 @@ async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'defa
     channelId: channelId || 'default',
     priority: 'high',
     badge: 1,
+    // ttl: 0 ensures immediate delivery attempt
+    ttl: 0,
+    // mutableContent allows notification service extensions to modify the notification
+    mutableContent: true,
   };
 
   try {
@@ -49,16 +51,18 @@ async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'defa
 
     const result = await response.json();
 
-    // Log the result for debugging
-    if (result.data?.[0]?.status === 'error') {
-      console.error(`[ExpoPush] Error sending to ${pushToken}:`, result.data[0].message);
-    } else {
-      console.log(`[ExpoPush] Success! Message sent to ${pushToken}`);
+    if (result.data && result.data[0]) {
+      const { status, message: errMsg, details } = result.data[0];
+      if (status === 'error') {
+        console.error(`[ExpoPush] Delivery failed for ${pushToken}:`, errMsg, details);
+      } else {
+        console.log(`[ExpoPush] Successfully queued! ID: ${result.data[0].id}`);
+      }
     }
 
     return result;
   } catch (error) {
-    console.error('[ExpoPush] Critical fetch error:', error);
+    console.error('[ExpoPush] API Request failed:', error);
     return { success: false, error: error.message };
   }
 }
