@@ -18,8 +18,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // ══════════════════════════════════════════════════════════
 //  UPDATE NOTES — Edit this for each new version
 // ══════════════════════════════════════════════════════════
-export const CURRENT_VERSION = '1.1.1';
-const STORAGE_KEY = `@animex_update_dismissed_v${CURRENT_VERSION}`;
+export const CURRENT_VERSION = '1.1.0 (Update 2)';
+const STORAGE_KEY = `@animex_update_dismissed_v1.1.0_u2`;
 
 // Platform-agnostic storage helper matching authStore
 const storage = {

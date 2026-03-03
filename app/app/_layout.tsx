@@ -12,6 +12,7 @@ import {
   addNotificationResponseListener,
 } from '@/utils/pushNotifications';
 import api from '@/services/api';
+import { NotificationHandler } from '@/components/NotificationHandler';
 
 import {
   useFonts,
@@ -66,11 +67,6 @@ export default function RootLayout() {
     }
 
     setupPushNotifications();
-
-    // Handle notifications received while app is foregrounded
-    notificationListener.current = addNotificationListener((notification) => {
-      console.log('Notification received in foreground:', notification.request.content.title);
-    });
 
     // Handle notification taps (user tapped on notification)
     responseListener.current = addNotificationResponseListener((response) => {
@@ -136,6 +132,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <NotificationProvider>
+        <NotificationHandler />
         <UpdateChecker />
         <StatusBar style="light" />
         <Stack screenOptions={{ headerShown: false }}>

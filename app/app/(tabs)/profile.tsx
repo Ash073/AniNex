@@ -28,6 +28,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Post } from '@/types';
 import UpdateNotesModal, { CURRENT_VERSION } from '@/components/UpdateNotesModal';
+import { registerForPushNotificationsAsync } from '@/utils/pushNotifications';
+import api from '@/services/api';
+import * as Notifications from 'expo-notifications';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_GAP = 2;
@@ -101,6 +104,8 @@ export default function ProfileScreen() {
   const [avatarError, setAvatarError] = useState(false);
   const [showFriendsSheet, setShowFriendsSheet] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [debugToken, setDebugToken] = useState<string | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Fetch user's posts
   const userId = user?.id || user?._id || '';
@@ -184,6 +189,35 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const handleDebugPush = async () => {
+    setIsRegistering(true);
+    try {
+      const token = await registerForPushNotificationsAsync();
+      setDebugToken(token);
+      if (token) {
+        await api.post('/users/push-token', { token });
+        Alert.alert('Success', 'Token registered with backend: ' + token.substring(0, 20) + '...');
+      } else {
+        Alert.alert('Error', 'Could not get push token. Check permissions.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const handleTestTray = async () => {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Tray Test 🏮",
+        body: "If you see this, your tray is working!",
+        data: { type: 'test' },
+      },
+      trigger: null, // show immediately
+    });
   };
 
   if (!user) return null;
@@ -484,6 +518,36 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} color="#ef4444" />
             </TouchableOpacity>
           </View>
+
+          {/* ── Push Debug Section ── */}
+          <View style={[s.card, { marginTop: 10, borderColor: 'rgba(99,102,241,0.2)' }]}>
+            <Text style={[s.sectionTitle, { fontSize: 14, color: '#818cf8' }]}>Push Diagnostics</Text>
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                style={s.debugBtn}
+                onPress={handleDebugPush}
+                disabled={isRegistering}
+              >
+                <Ionicons name="refresh-circle" size={18} color="#fff" />
+                <Text style={s.debugBtnText}>{isRegistering ? 'Registering...' : 'Force Register Token'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[s.debugBtn, { backgroundColor: 'rgba(34,197,94,0.15)', borderColor: 'rgba(34,197,94,0.3)' }]}
+                onPress={handleTestTray}
+              >
+                <Ionicons name="notifications-outline" size={18} color="#22c55e" />
+                <Text style={[s.debugBtnText, { color: '#22c55e' }]}>Test Local Tray</Text>
+              </TouchableOpacity>
+
+              {debugToken && (
+                <View style={s.tokenBox}>
+                  <Text style={s.tokenLabel}>Token:</Text>
+                  <Text style={s.tokenValue} selectable>{debugToken}</Text>
+                </View>
+              )}
+            </View>
+          </View>
         </ScrollView>
       </View>
       <FriendsBottomSheet
@@ -732,4 +796,24 @@ const s = StyleSheet.create({
     borderColor: 'rgba(251,191,36,0.3)',
   },
   badgeText: { color: '#fbbf24', fontWeight: '700', fontSize: 13 },
+  debugBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.3)',
+  },
+  debugBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  tokenBox: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 8,
+  },
+  tokenLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  tokenValue: { color: '#818cf8', fontSize: 11, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
 });
