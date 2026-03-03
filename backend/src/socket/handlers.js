@@ -280,17 +280,47 @@ const setupSocketHandlers = (io) => {
 
         const attachments = image_url ? [{ url: image_url, type: 'image' }] : [];
 
-        // Send push notification only for @mentioned users (not all members)
+        // ── Push notifications for server messages ──
+        // Send to @mentioned users (high priority) + to all other members
         const { createNewMessageNotification } = require('../utils/notificationHelper');
-        if (mentions.length > 0) {
-          for (const mention of mentions) {
+
+        // Fetch channel + server names for the notification
+        const { data: channelInfo } = await supabase
+          .from('channels')
+          .select('name')
+          .eq('id', channelId)
+          .single();
+
+        const { data: serverInfo } = await supabase
+          .from('servers')
+          .select('name')
+          .eq('id', channel.server_id)
+          .single();
+
+        const chName = channelInfo?.name || 'general';
+        const svName = serverInfo?.name || 'Server';
+
+        // Get all server members except the sender
+        const { data: members } = await supabase
+          .from('server_members')
+          .select('user_id')
+          .eq('server_id', channel.server_id)
+          .neq('user_id', socket.userId);
+
+        if (members && members.length > 0) {
+          // Determine which members are @mentioned
+          const mentionedIds = new Set(mentions.map(m => m.user_id));
+
+          for (const m of members) {
+            // Use 'mention' type for @mentioned users, 'server_message' for others
+            const notifType = mentionedIds.has(m.user_id) ? 'mention' : 'server_message';
             createNewMessageNotification(
-              mention.user_id,
+              m.user_id,
               socket.user,
               { content: content || 'Shared an image' },
               channelId,
-              'server_message',
-              { channelName: 'server', serverName: 'AniNeX' }
+              notifType,
+              { channelName: chName, serverName: svName }
             ).catch(() => { });
           }
         }

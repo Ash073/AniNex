@@ -1,43 +1,54 @@
 const { supabase } = require('../config/supabase');
 const { sendExpoPush } = require('./expoPush');
 
-// Map notification types to Android channels (Using 'default' for all to ensure max compatibility)
 const channelMap = {
   dm: 'default',
   server_message: 'default',
   mention: 'default',
   friend_request: 'default',
+  friend_online: 'default',
+  post_like: 'default',
+  post_comment: 'default',
+  server_added: 'default',
   anime_fact: 'default',
   default: 'default'
 };
 
-// Create a notification for a user
+/**
+ * Core function: create a notification in the DB, emit via socket, and send Expo push.
+ *
+ * Flow:
+ *   1. Insert into `notifications` table
+ *   2. Emit `notification:new` via Socket.IO (for in-app real-time toast)
+ *   3. Send Expo push notification (for tray / background / killed state)
+ *
+ * The client-side dedup system (markNotificationShown + wasRecentlyShown)
+ * ensures users don't see double notifications when both socket + push arrive.
+ */
 async function createNotification(userId, type, title, body, data = {}) {
   try {
-    const channelId = channelMap[type] || channelMap['default'];
-
-    // Ensure the data payload includes the type for frontend routing logic
-    const finalData = { ...(data || {}), type };
-
-    // Validate required parameters
     if (!userId || !type || !title || !body) {
-      console.warn('Missing required notification parameters:', { userId, type, title, body });
+      console.warn('[Notify] Missing params:', { userId, type, title, body });
       return null;
     }
 
-    // Validate user exists
-    const { data: userExists, error: userError } = await supabase
+    const channelId = channelMap[type] || channelMap['default'];
+    const finalData = { ...(data || {}), type };
+
+    // ── 1. Verify user exists ──
+    const { data: userRow, error: userError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, push_token')
       .eq('id', userId)
       .single();
 
-    if (userError || !userExists) {
-      console.warn('User not found for notification:', userId);
+    if (userError || !userRow) {
+      console.warn('[Notify] User not found:', userId);
       return null;
     }
 
-    const { data: notification, error } = await supabase
+    // ── 2. Insert notification into DB ──
+    const { data: notification, error: insertError } = await supabase
       .from('notifications')
       .insert({
         user_id: userId,
@@ -51,13 +62,16 @@ async function createNotification(userId, type, title, body, data = {}) {
       .select()
       .single();
 
-    if (error) {
-      console.error('Error creating notification:', error);
+    if (insertError) {
+      console.error('[Notify] DB insert error:', insertError.message);
       return null;
     }
 
-    // Emit real-time notification via socket if available
-    const io = global.io; // Assuming io is attached to global in server.js
+    // Add the notification ID to data for client-side dedup
+    finalData.notificationId = notification.id;
+
+    // ── 3. Emit socket event (real-time, for foreground in-app toast) ──
+    const io = global.io;
     if (io) {
       io.to(`user:${userId}`).emit('notification:new', {
         id: notification.id,
@@ -69,30 +83,31 @@ async function createNotification(userId, type, title, body, data = {}) {
       });
     }
 
-    // Send push notification if user has push_token
-    const { data: user } = await supabase
-      .from('users')
-      .select('push_token')
-      .eq('id', userId)
-      .single();
-    if (user && user.push_token) {
+    // ── 4. Send Expo push (for tray / background / killed) ──
+    if (userRow.push_token) {
       try {
-        const pushResult = await sendExpoPush(user.push_token, title, body, finalData, channelId);
-        if (pushResult && pushResult.data && Array.isArray(pushResult.data) && pushResult.data.length > 0) {
-          const mainResult = pushResult.data[0];
-          console.log(`Expo Push Status for user ${userId} (${type}):`, mainResult.status);
-          if (mainResult.status === 'error') {
-            console.error(`Expo Error:`, mainResult.message || mainResult.details?.error);
-          }
+        const pushResult = await sendExpoPush(
+          userRow.push_token,
+          title,
+          body,
+          finalData,
+          channelId
+        );
+
+        if (pushResult?.data?.[0]?.status === 'error') {
+          console.error(`[Notify] Push failed for ${userId}:`,
+            pushResult.data[0].message || pushResult.data[0].details?.error);
         }
-      } catch (err) {
-        console.error('Expo push error:', err);
+      } catch (pushErr) {
+        console.error('[Notify] Push exception:', pushErr.message);
       }
+    } else {
+      console.log(`[Notify] No push token for user ${userId}, socket-only`);
     }
 
     return notification;
   } catch (error) {
-    console.error('Error in createNotification:', error);
+    console.error('[Notify] createNotification error:', error.message);
     return null;
   }
 }
