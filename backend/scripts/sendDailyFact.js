@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { supabase } = require('../src/config/supabase');
 const { createDailyFactNotification } = require('../src/utils/notificationHelper');
 const { getPersonalizedFact } = require('../src/utils/animeFacts');
