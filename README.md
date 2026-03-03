@@ -53,6 +53,21 @@ animex/
 
 ## Changelog
 
+### Update 1.3.0 — 2026-03-04
+
+#### Feature: OpenAI Personality Classification Engine
+- **Intelligent Archetype Mapping**: Integrated OpenAI's `gpt-4o-mini` into the backend (`personalityAI.js`) to strictly format and classify users based on their self-descriptions.
+- **Robust Frontend Processing**: The app now intelligently parses both `snake_case` (raw API) and `camelCase` to map backend AI responses directly into the global user state.
+- **Crystallized Data Persistence**: The AI-assigned Character Name, Rank, and Fandom Category are formally saved to the database via a secured endpoint (`/api/auth/profile/:userId/identity`).
+
+#### Critical Refactor: Reliable Push Notifications
+- **Centralized Hook Logic**: Completely rebuilt the frontend notification system. Removed the bloated `NotificationHandler` component and consolidated all logic (token registration, background/foreground listeners, and deep routing) into a single pure hook (`useNotifications`).
+- **Foreground Alert Banners**: Adjusted `setNotificationHandler` to force the OS to show banners and list items even when the app is actively open and running in the foreground.
+- **Background Deliverability (Android/iOS)**: Updated the backend `expoPush.js` utility. The sender payload now includes `_contentAvailable: true`, `mutableContent: true`, `ttl: 0`, and `priority: 'high'` to wake up closed applications and ensure maximum background deliverability.
+- **Pre-emptive Android Channels**: Moved Android notification channel creation to immediately execute upon module load, ensuring system queues are ready before registration occurs.
+
+---
+
 ### Update 1.2.0 — 2026-03-02
 
 #### Feature: Premium Daily Anime Facts
