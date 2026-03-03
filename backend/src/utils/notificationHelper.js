@@ -1,13 +1,13 @@
 const { supabase } = require('../config/supabase');
 const { sendExpoPush } = require('./expoPush');
 
-// Map notification types to Android channels (as defined in Frontend)
+// Map notification types to Android channels (Using 'default' for all to ensure max compatibility)
 const channelMap = {
-  dm: 'messages',
-  server_message: 'messages',
-  mention: 'messages',
-  friend_request: 'friend-requests',
-  anime_fact: 'default', // Using default to ensure high visibility
+  dm: 'default',
+  server_message: 'default',
+  mention: 'default',
+  friend_request: 'default',
+  anime_fact: 'default',
   default: 'default'
 };
 
