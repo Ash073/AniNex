@@ -4,37 +4,36 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 // ─────────────────────────────────────────────────────────────
-//  NOTIFICATION DEDUP — prevents the same notification showing
-//  twice when both socket toast AND push banner arrive together.
+//  NOTIFICATION DEDUP — prevents duplicate toast when both
+//  socket and push fire for the same notification.
+//  Uses the unique notificationId from backend (not type!).
 // ─────────────────────────────────────────────────────────────
-const recentlyShownIds = new Set<string>();
-const DEDUP_WINDOW_MS = 3000;
+const shownNotificationIds = new Set<string>();
+const DEDUP_WINDOW_MS = 10_000; // 10 seconds
 
 /**
- * Mark a notification key as "already shown" so the push handler
- * can suppress the duplicate OS banner.
- * Call this from useSocket whenever a socket-based toast is displayed.
+ * Mark a notification as already displayed.
+ * @param id - The unique notification ID from backend
  */
-export function markNotificationShown(key: string) {
-  recentlyShownIds.add(key);
-  setTimeout(() => recentlyShownIds.delete(key), DEDUP_WINDOW_MS);
+export function markNotificationHandled(id: string): void {
+  if (!id) return;
+  shownNotificationIds.add(id);
+  setTimeout(() => shownNotificationIds.delete(id), DEDUP_WINDOW_MS);
 }
 
-/** Check whether this notification was already shown via socket toast. */
-export function wasRecentlyShown(key: string): boolean {
-  return recentlyShownIds.has(key);
+/**
+ * Check if notification was already handled.
+ */
+export function wasAlreadyHandled(id: string): boolean {
+  if (!id) return false;
+  return shownNotificationIds.has(id);
 }
 
 // ─────────────────────────────────────────────────────────────
 //  FOREGROUND HANDLER
-//  Decides how the OS treats a notification while app is open.
-//
-//  Local notifications (scheduleLocalNotification) are the
-//  PRIMARY tray delivery. Remote Expo pushes are the BACKUP
-//  (e.g. when app is killed or socket is down).
-//
-//  We always allow display — the dedup logic in useNotifications
-//  handles in-app toast dedup separately.
+//  Controls how the OS presents a notification while app is open.
+//  We SHOW the system banner (for tray) AND show our
+//  custom in-app toast via the listener in useNotifications.
 // ─────────────────────────────────────────────────────────────
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -65,9 +64,13 @@ if (Platform.OS === 'android') {
 
 // ─────────────────────────────────────────────────────────────
 //  TOKEN REGISTRATION
+//  Caches token in memory so we only fetch once per app lifecycle.
 // ─────────────────────────────────────────────────────────────
+let cachedToken: string | null = null;
+
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  let token: string | null = null;
+  // Return cached token if already registered this session
+  if (cachedToken) return cachedToken;
 
   if (!Device.isDevice) {
     console.warn('[Push] Notifications require a physical device');
@@ -98,17 +101,18 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   try {
-    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    cachedToken = token;
     console.log('[Push] Token acquired:', token);
+    return token;
   } catch (error) {
     console.error('[Push] Token error:', error);
+    return null;
   }
-
-  return token;
 }
 
 // ─────────────────────────────────────────────────────────────
-//  LISTENERS
+//  LISTENERS (thin wrappers for clean imports)
 // ─────────────────────────────────────────────────────────────
 export function addNotificationReceivedListener(
   listener: (notification: Notifications.Notification) => void,
@@ -120,18 +124,4 @@ export function addNotificationResponseReceivedListener(
   listener: (response: Notifications.NotificationResponse) => void,
 ) {
   return Notifications.addNotificationResponseReceivedListener(listener);
-}
-
-// ─────────────────────────────────────────────────────────────
-//  LOCAL NOTIFICATION (fallback / testing)
-// ─────────────────────────────────────────────────────────────
-export async function scheduleLocalNotification(
-  title: string,
-  body: string,
-  data: any = {},
-) {
-  return await Notifications.scheduleNotificationAsync({
-    content: { title, body, data, sound: 'default' },
-    trigger: null as any,
-  });
 }

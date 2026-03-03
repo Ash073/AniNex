@@ -5,9 +5,18 @@ import { useChatStore } from '@/store/chatStore';
 import { Message, DirectMessage } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNotification } from '@/components/NotificationProvider';
-import { markNotificationShown, scheduleLocalNotification } from '@/utils/pushNotifications';
 import api from '@/services/api';
+
+// ─────────────────────────────────────────────────────────────
+//  IMPORTANT ARCHITECTURE NOTE:
+//  Socket events are for DATA SYNC ONLY — updating Zustand stores
+//  and invalidating React Query caches.
+//
+//  All user-visible notifications (toasts + OS banners) are
+//  delivered exclusively through Expo Push → useNotifications.ts.
+//  Do NOT add notify(), scheduleLocalNotification(), or any
+//  notification display logic to this file.
+// ─────────────────────────────────────────────────────────────
 
 // Module-level flag to prevent duplicate listener registration
 // when useSocket() is called from multiple components simultaneously
@@ -31,13 +40,6 @@ export const useSocket = () => {
   let queryClient: ReturnType<typeof useQueryClient> | null = null;
   try {
     queryClient = useQueryClient();
-  } catch { }
-
-  // Notification toast (safe default if invoked outside provider)
-  let notify: ReturnType<typeof useNotification>['showNotification'] = () => { };
-  try {
-    const n = useNotification();
-    notify = n.showNotification;
   } catch { }
 
   // Set online status via REST as backup
@@ -65,13 +67,12 @@ export const useSocket = () => {
     // Mark local user online in store
     updateUser({ isOnline: true });
 
-    // ── Channel messages ──
+    // ── Channel messages (DATA SYNC) ──
     const handleNewMessage = (message: Message) => {
       const channelId = message.channel || message.channel_id;
       if (!channelId) return;
 
       // Deduplicate: remove any optimistic message from the same author
-      // (optimistic IDs start with 'optimistic-')
       const state = useChatStore.getState();
       const existing = state.messages[channelId] || [];
       const authorId = message.author?.id || (message as any).author_id;
@@ -84,6 +85,7 @@ export const useSocket = () => {
         useChatStore.getState().setMessages(channelId, [message, ...withoutOptimistic]);
       } else {
         addMessage(channelId, message);
+        incrementUnread();
       }
     };
 
@@ -91,9 +93,11 @@ export const useSocket = () => {
       if (!data?.messageId || !data?.channelId) return;
       removeMessage(data.channelId, data.messageId);
     };
+
     const handleTypingStart = (data: { userId: string; username: string; channelId: string }) => {
       addTypingUser(data);
     };
+
     const handleTypingStop = (data: { userId: string; channelId: string }) => {
       removeTypingUser(data.userId, data.channelId);
     };
@@ -105,145 +109,45 @@ export const useSocket = () => {
       }
     };
 
-    // ── Reactions handles ──
-    const handleMessageReaction = (data: { messageId: string, reactions: string[] }) => {
-      // We need to find which channel this message belongs to. 
-      // For simplicity, we can iterate over store, or just rely on the fact that reactions 
-      // are mostly relevant for the current channel.
+    // ── Reaction sync ──
+    const handleMessageReaction = (data: { messageId: string; reactions: string[] }) => {
       const state = useChatStore.getState();
-      Object.keys(state.messages).forEach(channelId => {
+      Object.keys(state.messages).forEach((channelId) => {
         updateMessage(channelId, data.messageId, { reactions: data.reactions });
       });
     };
 
-    const handleDMReaction = (data: { messageId: string, reactions: string[] }) => {
-      // DM screens typically handle their own state, but we can update store if needed
-      // Currently DMs are in [conversationId].tsx using local state.
+    const handleDMReaction = (_data: { messageId: string; reactions: string[] }) => {
+      // DM screens handle their own state via local state in [conversationId].tsx
     };
 
-    // ── DM notifications (when user is NOT on the DM screen) ──
+    // ── DM data sync (badge counts, conversation list refresh) ──
     const handleDMNotification = (payload: any) => {
-      // Refresh conversations list so badge counts update
       queryClient?.invalidateQueries({ queryKey: ['dm-conversations'] });
       queryClient?.invalidateQueries({ queryKey: ['dm-unread-count'] });
 
-      // Show toast + tray notification
       const msg = payload?.message || payload;
       if (msg && msg.sender_id !== userId) {
         incrementUnread();
-        const senderName = msg.sender?.username || msg.sender?.display_name || 'Someone';
-        const senderAvatar = msg.sender?.avatar;
-        const body = msg.image_url ? '📷 Sent an image' : (msg.content || 'New message');
-
-        // Mark as shown so remote push doesn't duplicate
-        markNotificationShown('dm');
-
-        // In-app toast
-        notify({
-          title: senderName,
-          body,
-          avatar: senderAvatar,
-        });
-
-        // LOCAL tray notification (guaranteed delivery to system tray)
-        scheduleLocalNotification(senderName, body, {
-          type: 'dm',
-          conversationId: payload?.conversationId,
-          senderName,
-          senderAvatar,
-        });
       }
     };
 
-    // ── Channel message notification ──
-    const handleMessageNotification = (message: Message) => {
-      const authorId = message.author?.id || (message as any).author_id;
-      if (authorId !== userId) {
-        incrementUnread();
-        const authorName = message.author?.username || 'Someone';
-        const authorAvatar = message.author?.avatar;
-        const hasImage = (message.attachments || []).some((a: any) => a.type === 'image');
-        const body = hasImage ? '📷 Sent an image' : (message.content || 'New message');
-        const channelId = message.channel || (message as any).channel_id;
-
-        // Mark as shown so remote push doesn't duplicate
-        markNotificationShown('server_message');
-
-        // In-app toast
-        notify({
-          title: authorName,
-          body,
-          avatar: authorAvatar,
-        });
-
-        // LOCAL tray notification (guaranteed delivery to system tray)
-        scheduleLocalNotification(`${authorName} in server`, body, {
-          type: 'server_message',
-          channelId,
-          channelName: (message as any).channelName,
-          serverName: (message as any).serverName,
-        });
-      }
-    };
-
-    // ── Server addition notifications ──
-    const handleServerAdded = (payload: any) => {
-      // Refresh servers list so the new server shows up
+    // ── Server addition (data sync) ──
+    const handleServerAdded = (_payload: any) => {
       queryClient?.invalidateQueries({ queryKey: ['servers'] });
       queryClient?.invalidateQueries({ queryKey: ['notifications'] });
       queryClient?.invalidateQueries({ queryKey: ['notification-count'] });
-
-      const serverName = payload?.serverName || 'a server';
-      const addedBy = payload?.addedBy || 'Someone';
-
-      markNotificationShown('server_added');
-
-      // In-app toast
-      notify({
-        title: 'Added to Server',
-        body: `${addedBy} added you to "${serverName}"`,
-      });
-
-      // LOCAL tray notification
-      scheduleLocalNotification('Added to Server', `${addedBy} added you to "${serverName}"`, {
-        type: 'server_added',
-        serverId: payload?.serverId,
-      });
     };
 
-    // ── Real-time notifications (friend requests, likes, comments, etc.) ──
+    // ── General notification sync (badge counts) ──
     const handleNotificationNew = (payload: any) => {
       queryClient?.invalidateQueries({ queryKey: ['notifications'] });
       queryClient?.invalidateQueries({ queryKey: ['notification-count'] });
-
-      const type = payload?.type || payload?.data?.type || 'general';
-
-      // DM and server_message have dedicated socket handlers above — skip to avoid double toast
-      if (type === 'dm' || type === 'server_message') return;
-
-      const title = payload?.title || 'New Notification';
-      const body = payload?.body || '';
-
-      // Mark so remote push doesn't duplicate
-      markNotificationShown(type);
-
-      // In-app toast
-      notify({
-        title,
-        body,
-      });
-
-      // LOCAL tray notification (guaranteed delivery to system tray)
-      scheduleLocalNotification(title, body, {
-        type,
-        ...(payload?.data || {}),
-      });
     };
 
     // Only register event listeners if this instance owns them
     if (shouldRegisterListeners) {
       socketService.on('message:new', handleNewMessage);
-      socketService.on('message:new', handleMessageNotification);
       socketService.on('message:deleted', handleMessageDeleted);
       socketService.on('message:reaction', handleMessageReaction);
       socketService.on('typing:start', handleTypingStart);
@@ -277,7 +181,6 @@ export const useSocket = () => {
       // Only unregister listeners if this instance owns them
       if (listenersRegisteredBy === instanceId) {
         socketService.off('message:new', handleNewMessage);
-        socketService.off('message:new', handleMessageNotification);
         socketService.off('message:deleted', handleMessageDeleted);
         socketService.off('message:reaction', handleMessageReaction);
         socketService.off('typing:start', handleTypingStart);
