@@ -1,6 +1,5 @@
 const { verifyToken } = require('../config/jwt');
 const { supabase } = require('../config/supabase');
-const { sendExpoPush } = require('../utils/expoPush');
 
 const setupSocketHandlers = (io) => {
   // Authentication middleware
@@ -148,15 +147,14 @@ const setupSocketHandlers = (io) => {
           message: populatedMessage,
         });
 
-        // Send push notification to recipient using unified helper
-        const { createNewMessageNotification } = require('../utils/notificationHelper');
-        createNewMessageNotification(
+        // Send push notification to recipient using new controller
+        const { notifyDMMessage } = require('../controllers/notificationController');
+        notifyDMMessage(
           otherId,
           socket.user,
-          { content: content || 'Shared an image' },
-          conversationId,
-          'dm'
-        ).catch(err => console.log('Socket DM Notify Err:', err));
+          { id: message.id, content: content || 'Shared an image', image_url },
+          conversationId
+        ).catch(err => console.error('[Socket] DM notify error:', err.message));
       } catch (error) {
         console.error('DM send error:', error);
         socket.emit('dm:error', { message: 'Failed to send DM' });
@@ -280,51 +278,6 @@ const setupSocketHandlers = (io) => {
 
         const attachments = image_url ? [{ url: image_url, type: 'image' }] : [];
 
-        // ── Push notifications for server messages ──
-        // Send to @mentioned users (high priority) + to all other members
-        const { createNewMessageNotification } = require('../utils/notificationHelper');
-
-        // Fetch channel + server names for the notification
-        const { data: channelInfo } = await supabase
-          .from('channels')
-          .select('name')
-          .eq('id', channelId)
-          .single();
-
-        const { data: serverInfo } = await supabase
-          .from('servers')
-          .select('name')
-          .eq('id', channel.server_id)
-          .single();
-
-        const chName = channelInfo?.name || 'general';
-        const svName = serverInfo?.name || 'Server';
-
-        // Get all server members except the sender
-        const { data: members } = await supabase
-          .from('server_members')
-          .select('user_id')
-          .eq('server_id', channel.server_id)
-          .neq('user_id', socket.userId);
-
-        if (members && members.length > 0) {
-          // Determine which members are @mentioned
-          const mentionedIds = new Set(mentions.map(m => m.user_id));
-
-          for (const m of members) {
-            // Use 'mention' type for @mentioned users, 'server_message' for others
-            const notifType = mentionedIds.has(m.user_id) ? 'mention' : 'server_message';
-            createNewMessageNotification(
-              m.user_id,
-              socket.user,
-              { content: content || 'Shared an image' },
-              channelId,
-              notifType,
-              { channelName: chName, serverName: svName }
-            ).catch(() => { });
-          }
-        }
-
         const insertData = {
           content: processedContent,
           author_id: socket.userId,
@@ -358,6 +311,70 @@ const setupSocketHandlers = (io) => {
 
         // Broadcast to channel
         io.to(`channel:${channelId}`).emit('message:new', populatedMessage);
+
+        // ── Push notifications for server messages ──
+        // ONLY notify members NOT in the channel room (they already see it via socket).
+        // This prevents the fan-out explosion that caused rate limiting.
+        const { notifyChannelMessage, notifyMention } = require('../controllers/notificationController');
+
+        const { data: channelInfo } = await supabase
+          .from('channels')
+          .select('name')
+          .eq('id', channelId)
+          .single();
+
+        const { data: serverInfo } = await supabase
+          .from('servers')
+          .select('name')
+          .eq('id', channel.server_id)
+          .single();
+
+        const chName = channelInfo?.name || 'general';
+        const svName = serverInfo?.name || 'Server';
+
+        const { data: members } = await supabase
+          .from('server_members')
+          .select('user_id')
+          .eq('server_id', channel.server_id)
+          .neq('user_id', socket.userId);
+
+        if (members && members.length > 0) {
+          // Get users currently viewing this channel (they see it live)
+          const channelRoom = `channel:${channelId}`;
+          let usersInRoom = new Set();
+          try {
+            const socketsInRoom = await io.in(channelRoom).fetchSockets();
+            usersInRoom = new Set(socketsInRoom.map(s => s.userId));
+          } catch (e) {
+            // fetchSockets may fail in some Socket.IO versions; notify all
+          }
+
+          const mentionedIds = new Set(mentions.map(m => m.user_id));
+
+          for (const m of members) {
+            // Skip users currently in the channel room (they see it live)
+            if (usersInRoom.has(m.user_id)) continue;
+
+            if (mentionedIds.has(m.user_id)) {
+              notifyMention(
+                m.user_id,
+                socket.user,
+                content || 'Shared an image',
+                channelId,
+                'channel',
+                { channelName: chName, serverName: svName }
+              ).catch(() => {});
+            } else {
+              notifyChannelMessage(
+                m.user_id,
+                socket.user,
+                { id: message.id, content: content || 'Shared an image' },
+                channelId,
+                { channelName: chName, serverName: svName }
+              ).catch(() => {});
+            }
+          }
+        }
       } catch (error) {
         console.error('Message send error:', error);
         socket.emit('message:error', { message: 'Failed to send message' });

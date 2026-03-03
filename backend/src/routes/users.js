@@ -6,17 +6,60 @@ const { protect } = require('../middleware/auth');
 const { analyzePersonality } = require('../utils/personalityAI');
 
 // POST /api/users/push-token
+// Registers or updates Expo push token. Validates format. Idempotent.
 router.post('/push-token', protect, async (req, res) => {
-  const { token } = req.body;
-  const userId = req.user.id;
-  if (!token) {
-    return res.status(400).json({ success: false, message: 'Token required' });
+  try {
+    const { token } = req.body;
+    const userId = req.user.id;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, message: 'Token required' });
+    }
+
+    // Validate Expo token format
+    const { validateToken } = require('../utils/pushValidator');
+    const check = validateToken(token);
+    if (!check.valid) {
+      return res.status(400).json({ success: false, message: check.reason });
+    }
+
+    // Check if token is already set for this user (idempotent)
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('push_token')
+      .eq('id', userId)
+      .single();
+
+    if (currentUser?.push_token === token) {
+      return res.json({ success: true, message: 'Token already registered' });
+    }
+
+    // Clear this token from any other user (token migration between devices)
+    await supabase
+      .from('users')
+      .update({ push_token: null })
+      .eq('push_token', token)
+      .neq('id', userId);
+
+    // Set token for current user
+    const { error } = await supabase
+      .from('users')
+      .update({
+        push_token: token,
+        push_token_updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+
+    console.log(`[PushToken] Registered for user ${userId}: ...${token.slice(-8)}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[PushToken] Error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
-  const { error } = await supabase.from('users').update({ push_token: token }).eq('id', userId);
-  if (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-  res.json({ success: true });
 });
 
 /**

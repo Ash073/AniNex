@@ -1,60 +1,59 @@
 require('dotenv').config();
 const { supabase } = require('../src/config/supabase');
-const { createDailyFactNotification } = require('../src/utils/notificationHelper');
+const { sendBulkDailyFacts } = require('../src/controllers/notificationController');
 const { getPersonalizedFact } = require('../src/utils/animeFacts');
 
 /**
- * Script to send personalized daily anime facts to all users with a push token
+ * Send personalized daily anime facts to all users with push tokens.
+ * Uses bulk notification API with batched Expo push for efficiency.
  */
 async function sendDailyFacts() {
-    console.log('--- Starting Personalized Daily Anime Fact Campaign ---');
+  console.log('--- Starting Daily Anime Fact Campaign ---');
+  const startTime = Date.now();
 
-    try {
-        // Get all users who have a push token and their favorite movies/shows
-        const { data: users, error } = await supabase
-            .from('users')
-            .select('id, username, favorite_anime')
-            .not('push_token', 'is', null);
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, username, favorite_anime')
+      .not('push_token', 'is', null);
 
-        if (error) {
-            throw error;
-        }
-
-        if (!users || users.length === 0) {
-            console.log('No users with push tokens found.');
-            return;
-        }
-
-        console.log(`Sending personalized facts to ${users.length} users...`);
-
-        let successCount = 0;
-
-        // Using for...of instead of map for safer API throttling
-        for (const user of users) {
-            try {
-                // Fetch fact based on user preferences
-                const fact = await getPersonalizedFact(user.favorite_anime);
-
-                if (fact) {
-                    await createDailyFactNotification(user.id, fact);
-                    successCount++;
-                }
-            } catch (err) {
-                console.error(`Failed to send fact to user ${user.username} (${user.id}):`, err.message);
-            }
-        }
-
-        console.log(`Campaign completed. Successfully sent to ${successCount}/${users.length} users.`);
-    } catch (err) {
-        console.error('Fatal error in personalized fact campaign:', err.message);
-    } finally {
-        console.log('--- Campaign Finished ---');
+    if (error) throw error;
+    if (!users || users.length === 0) {
+      console.log('No users with push tokens found.');
+      return;
     }
+
+    console.log(`Generating personalized facts for ${users.length} users...`);
+
+    // Generate all facts first
+    const userFacts = [];
+    for (const user of users) {
+      try {
+        const fact = await getPersonalizedFact(user.favorite_anime);
+        if (fact) {
+          userFacts.push({ userId: user.id, fact });
+        }
+      } catch (err) {
+        console.error(`Failed to generate fact for ${user.username}:`, err.message);
+      }
+    }
+
+    console.log(`Sending ${userFacts.length} facts via bulk API...`);
+
+    // Send all at once using bulk service (handles batching, dedup, rate limits)
+    const stats = await sendBulkDailyFacts(userFacts);
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Campaign completed in ${elapsed}s:`, stats);
+  } catch (err) {
+    console.error('Fatal error:', err.message);
+  } finally {
+    console.log('--- Campaign Finished ---');
+  }
 }
 
-// If run directly
 if (require.main === module) {
-    sendDailyFacts();
+  sendDailyFacts().then(() => process.exit(0));
 }
 
 module.exports = { sendDailyFacts };
