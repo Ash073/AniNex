@@ -27,26 +27,23 @@ export function wasRecentlyShown(key: string): boolean {
 
 // ─────────────────────────────────────────────────────────────
 //  FOREGROUND HANDLER
-//  Decides how the OS treats a push that arrives while app is open.
+//  Decides how the OS treats a notification while app is open.
 //
-//  Strategy: ALWAYS show the OS banner UNLESS the same notification
-//  was already displayed as an in-app socket toast (dedup).
-//  This guarantees notifications show even if socket is down.
+//  Local notifications (scheduleLocalNotification) are the
+//  PRIMARY tray delivery. Remote Expo pushes are the BACKUP
+//  (e.g. when app is killed or socket is down).
+//
+//  We always allow display — the dedup logic in useNotifications
+//  handles in-app toast dedup separately.
 // ─────────────────────────────────────────────────────────────
 Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    const data = (notification.request.content.data || {}) as Record<string, any>;
-    const dedupKey = String(data?.notificationId || data?.type || '');
-    const alreadyShown = dedupKey ? wasRecentlyShown(dedupKey) : false;
-
-    return {
-      shouldShowAlert: !alreadyShown,
-      shouldPlaySound: !alreadyShown,
-      shouldSetBadge: true,
-      shouldShowBanner: !alreadyShown,
-      shouldShowList: true,
-    };
-  },
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
 });
 
 // ─────────────────────────────────────────────────────────────

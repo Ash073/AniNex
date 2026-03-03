@@ -6,7 +6,7 @@ import { Message, DirectMessage } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNotification } from '@/components/NotificationProvider';
-import { markNotificationShown } from '@/utils/pushNotifications';
+import { markNotificationShown, scheduleLocalNotification } from '@/utils/pushNotifications';
 import api from '@/services/api';
 
 // Module-level flag to prevent duplicate listener registration
@@ -127,7 +127,7 @@ export const useSocket = () => {
       queryClient?.invalidateQueries({ queryKey: ['dm-conversations'] });
       queryClient?.invalidateQueries({ queryKey: ['dm-unread-count'] });
 
-      // Show toast notification
+      // Show toast + tray notification
       const msg = payload?.message || payload;
       if (msg && msg.sender_id !== userId) {
         incrementUnread();
@@ -135,13 +135,22 @@ export const useSocket = () => {
         const senderAvatar = msg.sender?.avatar;
         const body = msg.image_url ? '📷 Sent an image' : (msg.content || 'New message');
 
-        // Mark as shown so the push handler skips the duplicate OS banner
+        // Mark as shown so remote push doesn't duplicate
         markNotificationShown('dm');
 
+        // In-app toast
         notify({
           title: senderName,
           body,
           avatar: senderAvatar,
+        });
+
+        // LOCAL tray notification (guaranteed delivery to system tray)
+        scheduleLocalNotification(senderName, body, {
+          type: 'dm',
+          conversationId: payload?.conversationId,
+          senderName,
+          senderAvatar,
         });
       }
     };
@@ -155,14 +164,24 @@ export const useSocket = () => {
         const authorAvatar = message.author?.avatar;
         const hasImage = (message.attachments || []).some((a: any) => a.type === 'image');
         const body = hasImage ? '📷 Sent an image' : (message.content || 'New message');
+        const channelId = message.channel || (message as any).channel_id;
 
-        // Mark as shown so the push handler skips the duplicate OS banner
+        // Mark as shown so remote push doesn't duplicate
         markNotificationShown('server_message');
 
+        // In-app toast
         notify({
           title: authorName,
           body,
           avatar: authorAvatar,
+        });
+
+        // LOCAL tray notification (guaranteed delivery to system tray)
+        scheduleLocalNotification(`${authorName} in server`, body, {
+          type: 'server_message',
+          channelId,
+          channelName: (message as any).channelName,
+          serverName: (message as any).serverName,
         });
       }
     };
@@ -179,9 +198,16 @@ export const useSocket = () => {
 
       markNotificationShown('server_added');
 
+      // In-app toast
       notify({
         title: 'Added to Server',
         body: `${addedBy} added you to "${serverName}"`,
+      });
+
+      // LOCAL tray notification
+      scheduleLocalNotification('Added to Server', `${addedBy} added you to "${serverName}"`, {
+        type: 'server_added',
+        serverId: payload?.serverId,
       });
     };
 
@@ -198,12 +224,19 @@ export const useSocket = () => {
       const title = payload?.title || 'New Notification';
       const body = payload?.body || '';
 
-      // Mark so the push handler can skip OS banner
+      // Mark so remote push doesn't duplicate
       markNotificationShown(type);
 
+      // In-app toast
       notify({
         title,
         body,
+      });
+
+      // LOCAL tray notification (guaranteed delivery to system tray)
+      scheduleLocalNotification(title, body, {
+        type,
+        ...(payload?.data || {}),
       });
     };
 
