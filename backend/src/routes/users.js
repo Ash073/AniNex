@@ -6,10 +6,11 @@ const { protect } = require('../middleware/auth');
 const { analyzePersonality } = require('../utils/personalityAI');
 
 // POST /api/users/push-token
-// Registers or updates Expo push token. Validates format. Idempotent.
+// Registers Expo push token in push_tokens table (multi-device)
+// and legacy users.push_token column. Validates format. Idempotent.
 router.post('/push-token', protect, async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, platform } = req.body;
     const userId = req.user.id;
 
     if (!token || typeof token !== 'string') {
@@ -20,41 +21,60 @@ router.post('/push-token', protect, async (req, res) => {
     const { validateToken } = require('../utils/pushValidator');
     const check = validateToken(token);
     if (!check.valid) {
+      console.warn(`[PushToken] Invalid token from user ${userId}:`, check.reason);
       return res.status(400).json({ success: false, message: check.reason });
     }
 
-    // Check if token is already set for this user (idempotent)
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('push_token')
-      .eq('id', userId)
-      .single();
+    const now = new Date().toISOString();
+    const safePlatform = ['ios', 'android', 'web'].includes(platform) ? platform : 'unknown';
 
-    if (currentUser?.push_token === token) {
-      return res.json({ success: true, message: 'Token already registered' });
+    // ── 1. Upsert into push_tokens table (multi-device) ──
+    // Remove this token from any OTHER user (device migration)
+    await supabase
+      .from('push_tokens')
+      .delete()
+      .eq('token', token)
+      .neq('user_id', userId);
+
+    // Upsert for current user
+    const { error: ptError } = await supabase
+      .from('push_tokens')
+      .upsert(
+        {
+          user_id: userId,
+          token,
+          platform: safePlatform,
+          is_active: true,
+          updated_at: now,
+        },
+        { onConflict: 'user_id,token' },
+      );
+
+    if (ptError) {
+      console.error(`[PushToken] push_tokens upsert error:`, ptError.message);
+      // Don't return error yet — try legacy column too
+    } else {
+      console.log(`[PushToken] push_tokens upserted for ${userId}: ...${token.slice(-8)} (${safePlatform})`);
     }
 
-    // Clear this token from any other user (token migration between devices)
+    // ── 2. Legacy: update users.push_token column ──
+    // Keep this in sync so existing queries/scripts still work
     await supabase
       .from('users')
       .update({ push_token: null })
       .eq('push_token', token)
       .neq('id', userId);
 
-    // Set token for current user
-    const { error } = await supabase
+    const { error: userError } = await supabase
       .from('users')
-      .update({
-        push_token: token,
-        push_token_updated_at: new Date().toISOString(),
-      })
+      .update({ push_token: token, push_token_updated_at: now })
       .eq('id', userId);
 
-    if (error) {
-      return res.status(500).json({ success: false, message: error.message });
+    if (userError) {
+      console.error(`[PushToken] users table update error:`, userError.message);
     }
 
-    console.log(`[PushToken] Registered for user ${userId}: ...${token.slice(-8)}`);
+    console.log(`[PushToken] Registration complete for user ${userId}`);
     res.json({ success: true });
   } catch (err) {
     console.error('[PushToken] Error:', err.message);

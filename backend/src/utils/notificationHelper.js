@@ -12,7 +12,7 @@ const controller = require('../controllers/notificationController');
 const { sendNotification } = require('../services/notificationService');
 const { supabase } = require('../config/supabase');
 
-// ─── Direct mapping to new controller ───
+// ─── Direct mapping to controller functions ──────────────────
 const createFriendRequestNotification = controller.notifyFriendRequest;
 const createFriendOnlineNotification = controller.notifyFriendOnline;
 const createPostLikeNotification = controller.notifyPostLike;
@@ -24,7 +24,7 @@ const createDailyFactNotification = controller.notifyDailyFact;
  * Generic createNotification — maps to sendNotification.
  */
 async function createNotification(userId, type, title, body, data = {}) {
-  return sendNotification({ userId, type, title, body, data });
+  return sendNotification({ userId, type, title, body: String(body), data });
 }
 
 /**
@@ -37,11 +37,10 @@ async function createNewMessageNotification(userId, sender, message, targetId, t
   if (type === 'mention') {
     return controller.notifyMention(userId, sender, message.content, targetId, 'channel', extra);
   }
-  // server_message
   return controller.notifyChannelMessage(userId, sender, message, targetId, extra);
 }
 
-// ─── CRUD operations (unchanged) ───
+// ─── CRUD operations (unchanged) ────────────────────────────
 
 async function deleteNotification(notificationId, userId) {
   try {

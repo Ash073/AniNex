@@ -5,28 +5,36 @@
  * ALL notification sends MUST go through this module.
  *
  * Responsibilities:
- *   1. Deduplication via idempotency keys
- *   2. Rate limiting per user
- *   3. DB persistence
- *   4. Socket.IO real-time emit
- *   5. Expo push delivery
- *   6. Audit logging
+ *   1. Input validation
+ *   2. Idempotency (memory + DB unique index)
+ *   3. Rate limiting per user
+ *   4. DB persistence (notifications table)
+ *   5. Socket.IO real-time emit
+ *   6. Multi-device Expo push delivery (via push_tokens table)
+ *   7. Audit logging (push_send_log table)
+ *
+ * Architecture guarantee:
+ *   Features like DMs, friend requests, daily facts, etc. do NOT
+ *   call Expo directly. They call notificationController functions,
+ *   which call this service.
  */
 
 const { supabase } = require('../config/supabase');
-const { sendSinglePush, sendBatchPush, buildMessage } = require('../utils/expoPush');
+const { sendSinglePush, sendBatchPush, buildMessage } = require('../utils/pushSender');
 const { validatePayload, validateType, validateToken } = require('../utils/pushValidator');
 
-// ─── In-memory rate limiter ───
+// ─── In-memory idempotency cache ─────────────────────────────
+// Prevents duplicate push sends within a short window.
+// The DB unique index on idempotency_key is the authoritative guard.
+const recentKeys = new Map();
+const IDEMPOTENCY_WINDOW_MS = 30_000; // 30 seconds
+
+// ─── In-memory rate limiter ──────────────────────────────────
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 30;           // max 30 notifications per user per minute
 
-// ─── In-memory idempotency cache ───
-const recentKeys = new Map();
-const IDEMPOTENCY_WINDOW_MS = 30_000; // 30 seconds
-
-// Cleanup stale entries every 5 minutes
+// ─── Periodic cleanup (every 5 min) ─────────────────────────
 setInterval(() => {
   const now = Date.now();
   for (const [key, ts] of recentKeys) {
@@ -35,11 +43,9 @@ setInterval(() => {
   for (const [userId, data] of rateLimitMap) {
     if (now - data.windowStart > RATE_LIMIT_WINDOW_MS) rateLimitMap.delete(userId);
   }
-}, 5 * 60_000);
+}, 5 * 60_000).unref();
 
-/**
- * Channel ID mapping for Android notification channels.
- */
+// ─── Android channel mapping ─────────────────────────────────
 const CHANNEL_MAP = {
   dm: 'default',
   server_message: 'default',
@@ -49,24 +55,30 @@ const CHANNEL_MAP = {
   post_like: 'default',
   post_comment: 'default',
   server_added: 'default',
+  server_approved: 'default',
+  server_invite: 'default',
   anime_fact: 'default',
   general: 'default',
 };
 
+// ═════════════════════════════════════════════════════════════
+//  CORE: sendNotification
+// ═════════════════════════════════════════════════════════════
+
 /**
- * CORE: Send a notification to a user.
- * This is the ONLY function that routes/socket handlers should call.
+ * Send a notification to a single user.
+ * This is the ONLY function that controllers/routes/socket handlers should call.
  *
- * @param {object} params
- * @param {string} params.userId      - Target user ID
- * @param {string} params.type        - Notification type
- * @param {string} params.title       - Notification title
- * @param {string} params.body        - Notification body
- * @param {object} [params.data]      - Additional data payload
- * @param {string} [params.idempotencyKey] - Unique key to prevent duplicate sends
- * @param {boolean} [params.pushOnly] - Skip DB insert and socket emit
- * @param {boolean} [params.silent]   - Skip push (DB + socket only)
- * @returns {Promise<{ success: boolean, notification?: object, pushResult?: object, skipped?: string }>}
+ * @param {object}  params
+ * @param {string}  params.userId           - Target user UUID
+ * @param {string}  params.type             - Notification type
+ * @param {string}  params.title            - Display title
+ * @param {string}  params.body             - Display body (must be string)
+ * @param {object}  [params.data={}]        - Additional data payload
+ * @param {string}  [params.idempotencyKey] - Unique key to prevent duplicate sends
+ * @param {boolean} [params.pushOnly=false] - Skip DB insert + socket emit
+ * @param {boolean} [params.silent=false]   - Skip push (DB + socket only)
+ * @returns {Promise<{ success: boolean, notification?: object, pushResults?: Array, skipped?: string }>}
  */
 async function sendNotification({
   userId,
@@ -78,51 +90,42 @@ async function sendNotification({
   pushOnly = false,
   silent = false,
 }) {
-  const logPrefix = `[NotifService:${type}]`;
+  const logTag = `[NotifService:${type}:${userId?.substring(0, 8) || '?'}]`;
 
   try {
-    // ── 1. Input validation ──
+    // ── 1. Input validation ──────────────────────────────────
     if (!userId || !type || !title || !body) {
-      console.warn(`${logPrefix} Missing required params:`, {
-        userId,
-        type,
-        title: !!title,
-        body: !!body,
+      console.warn(`${logTag} SKIP — missing required params`, {
+        hasUserId: !!userId,
+        hasType: !!type,
+        hasTitle: !!title,
+        hasBody: !!body,
       });
       return { success: false, skipped: 'MISSING_PARAMS' };
     }
 
+    // Ensure body is always a string
+    const safeBody = String(body);
+
     const typeCheck = validateType(type);
     if (!typeCheck.valid) {
-      console.warn(`${logPrefix} Invalid type:`, typeCheck.reason);
+      console.warn(`${logTag} SKIP — invalid type: ${typeCheck.reason}`);
       return { success: false, skipped: typeCheck.reason };
     }
 
-    // ── 2. Idempotency check (memory) ──
+    // ── 2. Idempotency check (memory) ────────────────────────
     if (idempotencyKey) {
       if (recentKeys.has(idempotencyKey)) {
-        console.log(`${logPrefix} Duplicate skipped (memory): ${idempotencyKey}`);
+        console.log(`${logTag} SKIP — duplicate (memory cache): ${idempotencyKey}`);
         return { success: true, skipped: 'DUPLICATE_MEMORY' };
       }
       recentKeys.set(idempotencyKey, Date.now());
     }
 
-    // ── 3. Rate limiting ──
+    // ── 3. Rate limiting ─────────────────────────────────────
     if (!checkRateLimit(userId)) {
-      console.warn(`${logPrefix} Rate limited for user ${userId}`);
+      console.warn(`${logTag} SKIP — rate limited`);
       return { success: false, skipped: 'RATE_LIMITED' };
-    }
-
-    // ── 4. Fetch user (push_token) ──
-    const { data: userRow, error: userError } = await supabase
-      .from('users')
-      .select('id, push_token')
-      .eq('id', userId)
-      .single();
-
-    if (userError || !userRow) {
-      console.warn(`${logPrefix} User not found: ${userId}`);
-      return { success: false, skipped: 'USER_NOT_FOUND' };
     }
 
     const channelId = CHANNEL_MAP[type] || 'default';
@@ -130,20 +133,19 @@ async function sendNotification({
 
     let notification = null;
 
-    // ── 5. DB persistence ──
+    // ── 4. DB persistence ────────────────────────────────────
     if (!pushOnly) {
       try {
         const insertObj = {
           user_id: userId,
           type,
           title,
-          body,
+          body: safeBody,
           data: finalData,
           is_read: false,
           created_at: new Date().toISOString(),
           push_status: 'pending',
         };
-
         if (idempotencyKey) {
           insertObj.idempotency_key = idempotencyKey;
         }
@@ -155,23 +157,23 @@ async function sendNotification({
           .single();
 
         if (insertError) {
-          // Check if it's an idempotency violation (duplicate key)
           if (insertError.code === '23505' && idempotencyKey) {
-            console.log(`${logPrefix} Duplicate skipped (DB): ${idempotencyKey}`);
+            console.log(`${logTag} SKIP — duplicate (DB unique index): ${idempotencyKey}`);
             return { success: true, skipped: 'DUPLICATE_DB' };
           }
-          console.error(`${logPrefix} DB insert error:`, insertError.message);
-          // Continue — push is more important than DB record
+          console.error(`${logTag} DB insert error:`, insertError.message);
+          // Continue — push delivery is more important than DB record
         } else {
           notification = row;
           finalData.notificationId = notification.id;
+          console.log(`${logTag} DB row created: ${notification.id}`);
         }
       } catch (dbErr) {
-        console.error(`${logPrefix} DB exception:`, dbErr.message);
+        console.error(`${logTag} DB exception:`, dbErr.message);
       }
     }
 
-    // ── 6. Socket.IO real-time emit ──
+    // ── 5. Socket.IO real-time emit ──────────────────────────
     if (!pushOnly) {
       try {
         const io = global.io;
@@ -180,80 +182,109 @@ async function sendNotification({
             id: notification?.id || null,
             type,
             title,
-            body,
+            body: safeBody,
             data: finalData,
             created_at: notification?.created_at || new Date().toISOString(),
           });
+          console.log(`${logTag} Socket emitted to user:${userId}`);
         }
       } catch (socketErr) {
-        console.error(`${logPrefix} Socket emit error:`, socketErr.message);
+        console.error(`${logTag} Socket emit error:`, socketErr.message);
       }
     }
 
-    // ── 7. Expo Push ──
-    let pushResult = null;
+    // ── 6. Expo Push (multi-device) ──────────────────────────
+    let pushResults = [];
 
-    if (!silent && userRow.push_token) {
-      const tokenCheck = validateToken(userRow.push_token);
-      if (!tokenCheck.valid) {
-        console.warn(`${logPrefix} Invalid token for ${userId}: ${tokenCheck.reason}`);
+    if (!silent) {
+      const tokens = await getUserPushTokens(userId);
+
+      if (tokens.length === 0) {
+        console.log(`${logTag} No push tokens — socket/DB only`);
         await updatePushStatus(notification?.id, 'skipped');
       } else {
-        const message = buildMessage(
-          userRow.push_token,
-          title,
-          body,
-          finalData,
-          channelId,
-        );
+        console.log(`${logTag} Sending push to ${tokens.length} device(s)`);
 
-        const payloadCheck = validatePayload({
-          to: userRow.push_token,
-          title,
-          body,
-          data: finalData,
-          channelId,
-        });
-
-        if (!payloadCheck.valid) {
-          console.warn(`${logPrefix} Invalid payload: ${payloadCheck.reason}`);
-          await updatePushStatus(notification?.id, 'failed');
-        } else {
-          pushResult = await sendSinglePush(message);
-
-          if (pushResult.success) {
-            await updatePushStatus(notification?.id, 'sent', pushResult.ticketId);
-          } else {
-            await updatePushStatus(notification?.id, 'failed');
+        for (const tokenRow of tokens) {
+          const tokenCheck = validateToken(tokenRow.token);
+          if (!tokenCheck.valid) {
+            console.warn(`${logTag} Invalid token skipped: ${tokenCheck.reason}`);
+            continue;
           }
 
+          const payloadCheck = validatePayload({
+            to: tokenRow.token,
+            title,
+            body: safeBody,
+            data: finalData,
+            channelId,
+          });
+
+          if (!payloadCheck.valid) {
+            console.warn(`${logTag} Invalid payload skipped: ${payloadCheck.reason}`);
+            continue;
+          }
+
+          const message = buildMessage(
+            tokenRow.token,
+            title,
+            safeBody,
+            finalData,
+            channelId,
+          );
+
+          const pushResult = await sendSinglePush(message);
+          pushResults.push(pushResult);
+
           // Audit log
-          await logPushSend(userId, type, idempotencyKey, pushResult);
+          await logPushAudit({
+            userId,
+            type,
+            title,
+            body: safeBody,
+            pushToken: tokenRow.token,
+            idempotencyKey,
+            pushResult,
+          });
+        }
+
+        // Update push_status on notification row
+        const anySuccess = pushResults.some(r => r.success);
+        const firstTicket = pushResults.find(r => r.ticketId)?.ticketId || null;
+
+        if (anySuccess) {
+          await updatePushStatus(notification?.id, 'sent', firstTicket);
+        } else if (pushResults.length > 0) {
+          await updatePushStatus(notification?.id, 'failed');
         }
       }
-    } else if (!silent && !userRow.push_token) {
-      console.log(`${logPrefix} No push token for ${userId} — socket-only`);
-      await updatePushStatus(notification?.id, 'skipped');
     }
 
-    return { success: true, notification, pushResult };
+    return { success: true, notification, pushResults };
+
   } catch (err) {
-    console.error(`${logPrefix} Unhandled error:`, err.message, err.stack);
+    console.error(`${logTag} UNHANDLED ERROR:`, err.message, err.stack);
     return { success: false, skipped: 'INTERNAL_ERROR' };
   }
 }
 
+// ═════════════════════════════════════════════════════════════
+//  BULK: sendBulkNotifications
+// ═════════════════════════════════════════════════════════════
+
 /**
- * Bulk send notifications (for daily facts, server announcements, etc.)
- * Uses batched Expo push for efficiency.
+ * Send notifications to many users efficiently.
+ * Uses batched Expo push for throughput (daily facts, announcements).
  *
- * @param {Array<{userId, type, title, body, data, idempotencyKey}>} notifications
+ * @param {Array<{userId, type, title, body, data?, idempotencyKey?}>} notifications
  * @returns {Promise<{ sent: number, skipped: number, failed: number }>}
  */
 async function sendBulkNotifications(notifications) {
   const stats = { sent: 0, skipped: 0, failed: 0 };
   const pushMessages = [];
   const pushMeta = [];
+
+  console.log(`[BulkNotif] Starting bulk send of ${notifications.length} notifications`);
 
   for (const notif of notifications) {
     const { userId, type, title, body, data = {}, idempotencyKey = null } = notif;
@@ -264,7 +295,9 @@ async function sendBulkNotifications(notifications) {
       continue;
     }
 
-    // Idempotency
+    const safeBody = String(body);
+
+    // Idempotency (memory check)
     if (idempotencyKey && recentKeys.has(idempotencyKey)) {
       stats.skipped++;
       continue;
@@ -285,7 +318,7 @@ async function sendBulkNotifications(notifications) {
         user_id: userId,
         type,
         title,
-        body,
+        body: safeBody,
         data: finalData,
         is_read: false,
         created_at: new Date().toISOString(),
@@ -316,68 +349,116 @@ async function sendBulkNotifications(notifications) {
           id: row?.id || null,
           type,
           title,
-          body,
+          body: safeBody,
           data: finalData,
           created_at: new Date().toISOString(),
         });
       }
     } catch (err) {
-      console.error(`[BulkNotif] Error for ${userId}:`, err.message);
+      console.error(`[BulkNotif] DB/socket error for ${userId}:`, err.message);
     }
 
-    // Queue push message
+    // Gather push tokens for this user (multi-device)
     try {
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('push_token')
-        .eq('id', userId)
-        .single();
+      const tokens = await getUserPushTokens(userId);
 
-      if (userRow?.push_token) {
-        const tokenCheck = validateToken(userRow.push_token);
-        if (tokenCheck.valid) {
-          pushMessages.push(
-            buildMessage(
-              userRow.push_token,
-              title,
-              body,
-              finalData,
-              CHANNEL_MAP[type] || 'default',
-            ),
-          );
-          pushMeta.push({ userId, type, idempotencyKey });
-        }
+      for (const tokenRow of tokens) {
+        const tokenCheck = validateToken(tokenRow.token);
+        if (!tokenCheck.valid) continue;
+
+        pushMessages.push(
+          buildMessage(tokenRow.token, title, safeBody, finalData, CHANNEL_MAP[type] || 'default'),
+        );
+        pushMeta.push({ userId, type, idempotencyKey, token: tokenRow.token });
       }
     } catch (e) {
-      // silently continue
+      // Silently continue
     }
   }
 
   // Send all pushes in Expo batches
   if (pushMessages.length > 0) {
+    console.log(`[BulkNotif] Sending ${pushMessages.length} push messages in batches`);
     const results = await sendBatchPush(pushMessages);
+
     for (let i = 0; i < results.length; i++) {
       if (results[i].success) {
         stats.sent++;
-        logPushSend(
-          pushMeta[i].userId,
-          pushMeta[i].type,
-          pushMeta[i].idempotencyKey,
-          results[i],
-        ).catch(() => {});
+        logPushAudit({
+          userId: pushMeta[i].userId,
+          type: pushMeta[i].type,
+          pushToken: pushMeta[i].token,
+          idempotencyKey: pushMeta[i].idempotencyKey,
+          pushResult: results[i],
+        }).catch(() => {});
       } else {
         stats.failed++;
       }
     }
   }
 
-  console.log(
-    `[BulkNotif] Done: ${stats.sent} sent, ${stats.skipped} skipped, ${stats.failed} failed`,
-  );
+  console.log(`[BulkNotif] Done: ${stats.sent} sent, ${stats.skipped} skipped, ${stats.failed} failed`);
   return stats;
 }
 
-// ─── Helper: Rate Limiter ───
+// ═════════════════════════════════════════════════════════════
+//  HELPERS
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Fetch all valid push tokens for a user from push_tokens table.
+ * Falls back to users.push_token if push_tokens table is empty/missing.
+ *
+ * @param {string} userId
+ * @returns {Promise<Array<{ token: string, device_id?: string }>>}
+ */
+async function getUserPushTokens(userId) {
+  try {
+    // Primary: push_tokens table (multi-device)
+    const { data: tokenRows, error: ptError } = await supabase
+      .from('push_tokens')
+      .select('token, device_id')
+      .eq('user_id', userId);
+
+    if (!ptError && tokenRows && tokenRows.length > 0) {
+      return tokenRows;
+    }
+
+    // Fallback: legacy users.push_token column
+    const { data: userRow, error: userError } = await supabase
+      .from('users')
+      .select('push_token')
+      .eq('id', userId)
+      .single();
+
+    if (!userError && userRow?.push_token) {
+      return [{ token: userRow.push_token }];
+    }
+
+    return [];
+  } catch (err) {
+    console.error(`[NotifService] Error fetching push tokens for ${userId}:`, err.message);
+
+    // Last-resort fallback to users table
+    try {
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('push_token')
+        .eq('id', userId)
+        .single();
+      if (userRow?.push_token) return [{ token: userRow.push_token }];
+    } catch {
+      // give up
+    }
+    return [];
+  }
+}
+
+/**
+ * Rate limiter check (sliding window).
+ * @param {string} userId
+ * @returns {boolean} true if allowed
+ */
 function checkRateLimit(userId) {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
@@ -386,16 +467,19 @@ function checkRateLimit(userId) {
     rateLimitMap.set(userId, { count: 1, windowStart: now });
     return true;
   }
-
   if (entry.count >= RATE_LIMIT_MAX) {
     return false;
   }
-
   entry.count++;
   return true;
 }
 
-// ─── Helper: Update push_status on notification row ───
+/**
+ * Update push_status on a notification row.
+ * @param {string|null} notificationId
+ * @param {string} status - 'pending' | 'sent' | 'failed' | 'skipped'
+ * @param {string|null} ticketId
+ */
 async function updatePushStatus(notificationId, status, ticketId = null) {
   if (!notificationId) return;
   try {
@@ -403,23 +487,29 @@ async function updatePushStatus(notificationId, status, ticketId = null) {
     if (ticketId) update.push_ticket_id = ticketId;
     await supabase.from('notifications').update(update).eq('id', notificationId);
   } catch (e) {
-    // silently continue
+    console.error('[NotifService] updatePushStatus error:', e.message);
   }
 }
 
-// ─── Helper: Audit log ───
-async function logPushSend(userId, type, idempotencyKey, pushResult) {
+/**
+ * Write audit row to push_send_log for debugging.
+ */
+async function logPushAudit({ userId, type, title, body, pushToken, idempotencyKey, pushResult }) {
   try {
     await supabase.from('push_send_log').insert({
       user_id: userId,
       notification_type: type,
-      idempotency_key: idempotencyKey,
+      title: title || null,
+      body: body || null,
+      push_token: pushToken || null,
+      idempotency_key: idempotencyKey || null,
       push_ticket_id: pushResult?.ticketId || null,
       status: pushResult?.success ? 'sent' : 'failed',
       error_message: pushResult?.error || null,
     });
   } catch (e) {
-    // silently continue
+    // Non-critical — log and continue
+    console.warn('[NotifService] Audit log insert failed:', e.message);
   }
 }
 

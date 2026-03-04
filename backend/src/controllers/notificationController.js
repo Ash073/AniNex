@@ -3,21 +3,33 @@
  *
  * High-level notification factory functions.
  * Translates business events into notification service calls.
- * Routes/socket handlers call THESE functions.
  *
- * Each function:
- *   - Validates business-level params (e.g., don't notify self)
- *   - Generates an idempotency key
- *   - Delegates to notificationService.sendNotification()
+ * Contract:
+ *   - Routes, socket handlers, and cron jobs call THESE functions.
+ *   - Each function validates business-level params (e.g., don't notify self).
+ *   - Each function generates an idempotency key.
+ *   - Each function delegates to notificationService.sendNotification().
+ *   - NO feature may call Expo directly. Always go through this layer.
  */
 
 const { sendNotification, sendBulkNotifications } = require('../services/notificationService');
 const { generateIdempotencyKey } = require('../utils/pushValidator');
 
-// ─── DM Message ───
+// ═════════════════════════════════════════════════════════════
+//  DM Message
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Notify recipient of a new direct message.
+ *
+ * @param {string} recipientId
+ * @param {{ id: string, username: string, display_name?: string, avatar?: string }} sender
+ * @param {{ id?: string, content?: string, image_url?: string }} message
+ * @param {string} conversationId
+ */
 async function notifyDMMessage(recipientId, sender, message, conversationId) {
   if (!recipientId || !sender?.id || !message) return null;
-  if (recipientId === sender.id) return null;
+  if (recipientId === sender.id) return null; // Don't notify self
 
   const messageId = message.id || `${conversationId}-${Date.now()}`;
   const idempotencyKey = generateIdempotencyKey(recipientId, 'dm', messageId);
@@ -27,7 +39,7 @@ async function notifyDMMessage(recipientId, sender, message, conversationId) {
     type: 'dm',
     title: `Message from ${sender.username || 'Someone'}`,
     body: message.content
-      ? message.content.substring(0, 100)
+      ? String(message.content).substring(0, 100)
       : message.image_url
         ? '📷 Sent an image'
         : 'New message',
@@ -41,7 +53,19 @@ async function notifyDMMessage(recipientId, sender, message, conversationId) {
   });
 }
 
-// ─── Server Channel Message ───
+// ═════════════════════════════════════════════════════════════
+//  Server Channel Message
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Notify a user about a new message in a server channel.
+ *
+ * @param {string} recipientId
+ * @param {{ id: string, username: string, display_name?: string, avatar?: string }} sender
+ * @param {{ id?: string, content?: string }} message
+ * @param {string} channelId
+ * @param {{ channelName?: string, serverName?: string }} extra
+ */
 async function notifyChannelMessage(recipientId, sender, message, channelId, extra = {}) {
   if (!recipientId || !sender?.id || !message) return null;
   if (recipientId === sender.id) return null;
@@ -54,7 +78,7 @@ async function notifyChannelMessage(recipientId, sender, message, channelId, ext
     type: 'server_message',
     title: `New message in ${extra.channelName || 'channel'}`,
     body: message.content
-      ? message.content.substring(0, 100)
+      ? String(message.content).substring(0, 100)
       : 'Sent an attachment',
     data: {
       senderId: sender.id,
@@ -68,7 +92,20 @@ async function notifyChannelMessage(recipientId, sender, message, channelId, ext
   });
 }
 
-// ─── @Mention in Channel/Post ───
+// ═════════════════════════════════════════════════════════════
+//  @Mention
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Notify a user about an @mention in a channel or post.
+ *
+ * @param {string} recipientId
+ * @param {{ id: string, username: string }} sender
+ * @param {string} content - The message/post content
+ * @param {string} targetId - Channel or post ID
+ * @param {'channel'|'post'} targetType
+ * @param {{ channelName?: string, serverName?: string }} extra
+ */
 async function notifyMention(recipientId, sender, content, targetId, targetType = 'channel', extra = {}) {
   if (!recipientId || !sender?.id) return null;
   if (recipientId === sender.id) return null;
@@ -88,7 +125,7 @@ async function notifyMention(recipientId, sender, content, targetId, targetType 
     userId: recipientId,
     type: 'mention',
     title,
-    body: content ? content.substring(0, 100) : 'You were mentioned',
+    body: content ? String(content).substring(0, 100) : 'You were mentioned',
     data: {
       senderId: sender.id,
       senderName: sender.username,
@@ -100,7 +137,16 @@ async function notifyMention(recipientId, sender, content, targetId, targetType 
   });
 }
 
-// ─── Friend Request ───
+// ═════════════════════════════════════════════════════════════
+//  Friend Request
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Notify a user about an incoming friend request.
+ *
+ * @param {string} receiverId
+ * @param {{ id: string, username: string, avatar?: string }} sender
+ */
 async function notifyFriendRequest(receiverId, sender) {
   if (!receiverId || !sender?.id || !sender?.username) return null;
   if (receiverId === sender.id) return null;
@@ -125,12 +171,17 @@ async function notifyFriendRequest(receiverId, sender) {
   });
 }
 
-// ─── Friend Online ───
+// ═════════════════════════════════════════════════════════════
+//  Friend Online
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Notify a user when a friend comes online (once per day per friend).
+ */
 async function notifyFriendOnline(userId, friend) {
   if (!userId || !friend?.id || !friend?.username) return null;
   if (userId === friend.id) return null;
 
-  // Only notify once per day per friend
   const today = new Date().toISOString().split('T')[0];
   const idempotencyKey = generateIdempotencyKey(userId, 'friend_online', `${friend.id}-${today}`);
 
@@ -148,7 +199,10 @@ async function notifyFriendOnline(userId, friend) {
   });
 }
 
-// ─── Post Like ───
+// ═════════════════════════════════════════════════════════════
+//  Post Like
+// ═════════════════════════════════════════════════════════════
+
 async function notifyPostLike(postAuthorId, liker, post) {
   if (!postAuthorId || !liker?.id || !post?.id) return null;
   if (postAuthorId === liker.id) return null;
@@ -170,7 +224,10 @@ async function notifyPostLike(postAuthorId, liker, post) {
   });
 }
 
-// ─── Post Comment ───
+// ═════════════════════════════════════════════════════════════
+//  Post Comment
+// ═════════════════════════════════════════════════════════════
+
 async function notifyPostComment(postAuthorId, commenter, post, comment) {
   if (!postAuthorId || !commenter?.id || !post?.id || !comment) return null;
   if (postAuthorId === commenter.id) return null;
@@ -191,13 +248,16 @@ async function notifyPostComment(postAuthorId, commenter, post, comment) {
       commenter_username: commenter.username,
       post_id: post.id,
       post_title: post.title || 'Untitled Post',
-      comment_content: comment.content ? comment.content.substring(0, 50) : '',
+      comment_content: comment.content ? String(comment.content).substring(0, 50) : '',
     },
     idempotencyKey,
   });
 }
 
-// ─── Server Invite ───
+// ═════════════════════════════════════════════════════════════
+//  Server Invite
+// ═════════════════════════════════════════════════════════════
+
 async function notifyServerInvite(userId, inviter, server) {
   if (!userId || !inviter?.id || !server?.id) return null;
   if (userId === inviter.id) return null;
@@ -220,7 +280,13 @@ async function notifyServerInvite(userId, inviter, server) {
   });
 }
 
-// ─── Daily Anime Fact ───
+// ═════════════════════════════════════════════════════════════
+//  Daily Anime Fact
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Send a single daily fact notification to one user.
+ */
 async function notifyDailyFact(userId, fact) {
   if (!userId || !fact) return null;
 
@@ -231,13 +297,17 @@ async function notifyDailyFact(userId, fact) {
     userId,
     type: 'anime_fact',
     title: 'Daily Anime Fact',
-    body: fact,
-    data: { fact },
+    body: String(fact),
+    data: { fact: String(fact) },
     idempotencyKey,
   });
 }
 
-// ─── Bulk Daily Facts (uses batched push) ───
+/**
+ * Send daily facts to many users at once (batched Expo push).
+ *
+ * @param {Array<{ userId: string, fact: string }>} userFacts
+ */
 async function sendBulkDailyFacts(userFacts) {
   const today = new Date().toISOString().split('T')[0];
 
@@ -245,13 +315,17 @@ async function sendBulkDailyFacts(userFacts) {
     userId,
     type: 'anime_fact',
     title: 'Daily Anime Fact',
-    body: fact,
-    data: { fact },
+    body: String(fact),
+    data: { fact: String(fact) },
     idempotencyKey: generateIdempotencyKey(userId, 'anime_fact', today),
   }));
 
   return sendBulkNotifications(notifications);
 }
+
+// ═════════════════════════════════════════════════════════════
+//  Exports
+// ═════════════════════════════════════════════════════════════
 
 module.exports = {
   notifyDMMessage,
