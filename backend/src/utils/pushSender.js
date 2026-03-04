@@ -93,7 +93,7 @@ async function sendSinglePush(message) {
       const response = await fetch(EXPO_PUSH_URL, {
         method: 'POST',
         headers: buildHeaders(),
-        body: JSON.stringify(message),
+        body: JSON.stringify([message]),  // Always send as array for consistent response format
       });
 
       console.log(`${logPrefix} HTTP ${response.status}`);
@@ -120,12 +120,18 @@ async function sendSinglePush(message) {
       // Parse response
       const result = await response.json();
 
-      if (!result.data || !Array.isArray(result.data) || result.data.length === 0) {
+      // Expo returns { data: { ... } } for single message,
+      // or { data: [ {...}, {...} ] } for array of messages.
+      // Normalize to always work with a single ticket.
+      let ticket;
+      if (Array.isArray(result.data) && result.data.length > 0) {
+        ticket = result.data[0];
+      } else if (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
+        ticket = result.data;
+      } else {
         console.error(`${logPrefix} Unexpected response shape:`, JSON.stringify(result).substring(0, 200));
         return { success: false, error: 'INVALID_RESPONSE', errorType: 'InvalidResponse' };
       }
-
-      const ticket = result.data[0];
 
       // Success
       if (ticket.status === 'ok') {

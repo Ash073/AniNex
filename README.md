@@ -48,10 +48,32 @@ animex/
 - Supabase (PostgreSQL) for database
 - JWT for authentication
 - Expo Push API for sending push notifications
+- Google Gemini 1.5 Pro for AI personality analysis
 
 ---
 
 ## Changelog
+
+### Update 1.4.0 — 2026-03-04
+
+#### Feature: Gemini-Powered Personality Analysis
+- **AI Engine Upgrade**: Replaced OpenAI `gpt-4o-mini` with Google **Gemini 1.5 Pro** for significantly more accurate anime personality matching.
+- **Deep Psychological Reasoning**: New prompt analyzes 10 psychological dimensions (introversion/extroversion, leadership, empathy, courage, intelligence, humor, emotional stability, strategic thinking, moral alignment, social behavior) before selecting a character match.
+- **Richer Results**: Responses now include the matched `anime` series name, a `traits` array of 5 personality traits, a `confidence` percentage, and a detailed `explanation` of why the character was chosen — all in addition to the existing fields.
+- **Service Architecture**: Added `geminiService.js` as a reusable low-level Gemini API client with timeout protection (30s), exponential backoff retry (2 attempts), JSON validation, and markdown code-fence stripping.
+- **Production Safety**: `personalityAI.js` now validates every field from the AI response and returns a graceful fallback if any call fails — the server never crashes on AI errors.
+- **Backward Compatible**: Frontend `identityService.ts` continues to work unchanged — all original fields (`personality_type`, `character_match`, `fandom_category`, `power_archetype`, `motivational_title`, `starting_rank`) are preserved.
+
+#### Notification System V3 — Full Rebuild
+- **Multi-Device Push**: New `push_tokens` table supports multiple devices per user. The service iterates all active tokens when delivering push notifications.
+- **3-Layer Deduplication**: Memory cache (30s TTL) + DB unique index on `idempotency_key` + controller-generated deterministic keys prevent duplicate pushes.
+- **Rate Limiting**: Sliding window rate limiter (30 notifications/user/minute) prevents push spam.
+- **Auto Token Cleanup**: `DeviceNotRegistered` errors automatically remove stale tokens from both `push_tokens` and legacy `users.push_token`.
+- **Structured Logging**: Every notification step tagged with `[module:type:userId]` for production debugging.
+- **Batch Safety**: `sendBatchPush()` limited to 2 retries max — eliminates the infinite retry loop from V2.
+- **Backward-Compatible Shims**: `expoPush.js` and `notificationHelper.js` re-export from the new modules so all existing route imports still resolve.
+
+---
 
 ### Update 1.3.0 — 2026-03-04
 
@@ -238,6 +260,7 @@ SUPABASE_KEY=your_supabase_anon_key
 JWT_SECRET=your_jwt_secret
 PORT=5000
 CLIENT_URL=*
+GEMINI_API_KEY=your_google_gemini_api_key
 ```
 
 ---
@@ -270,12 +293,13 @@ CLIENT_URL=*
 - Socket listeners are registered once globally via a module-level lock in `useSocket.ts`
 - Socket disconnects when the app goes to background and reconnects on foreground
 
-### Push Notifications Flow
+### Push Notifications Flow (V3)
 1. On login, the app requests notification permission via `expo-device` + `expo-notifications`
-2. The Expo push token is sent to the backend and stored in `users.push_token`
-3. When events occur (DM, server message, friend request, @mention), the backend sends push via Expo Push API
-4. The frontend also schedules local notifications for in-app socket events
-5. Tapping a notification navigates to the relevant screen
+2. The Expo push token is sent to the backend and stored in both `push_tokens` table (multi-device) and legacy `users.push_token`
+3. When events occur, `notificationController` → `notificationService` → `pushSender` pipeline handles: dedup → rate-limit → DB insert → Socket emit → multi-device push delivery
+4. Invalid tokens are auto-cleaned on `DeviceNotRegistered` errors
+5. All push activity is audited in `push_send_log` for debugging
+6. Tapping a notification navigates to the relevant screen via deep linking
 
 ### Message Sending (Server Chat)
 - Messages are sent via Socket.IO (`message:send` event), not REST

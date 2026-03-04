@@ -84,30 +84,39 @@ router.post('/push-token', protect, async (req, res) => {
 
 /**
  * @route   POST /api/users/analyze-personality
- * @desc    Get anime archetype analysis based on self-description
+ * @desc    Get anime archetype analysis based on self-description (Gemini 1.5 Pro)
  * @access  Private
  */
 router.post('/analyze-personality', protect, async (req, res) => {
+  const logTag = '[PersonalityRoute]';
   try {
     const { description } = req.body;
-    if (!description || description.trim().length < 5) {
+
+    if (!description || typeof description !== 'string' || description.trim().length < 5) {
       return res.status(400).json({
         success: false,
         message: 'Please provide a more detailed description (min 5 characters).'
       });
     }
 
-    const analysis = await analyzePersonality(description);
+    // Cap input length to prevent abuse
+    const trimmed = description.trim().substring(0, 2000);
+
+    console.log(`${logTag} User ${req.user.id} — description: ${trimmed.length} chars`);
+
+    const analysis = await analyzePersonality(trimmed);
+
+    console.log(`${logTag} Result for ${req.user.id}: ${analysis.character_match} (${analysis.confidence || 'N/A'})`);
 
     res.json({
       success: true,
       data: analysis
     });
   } catch (error) {
-    console.error('Personality Analysis Route Error:', error.message);
+    console.error(`${logTag} Error for user ${req.user?.id}:`, error.message);
     res.status(500).json({
       success: false,
-      message: error.message || 'AI Analysis failed'
+      message: 'AI personality analysis is temporarily unavailable. Please try again later.'
     });
   }
 });
