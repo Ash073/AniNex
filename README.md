@@ -54,6 +54,21 @@ animex/
 
 ## Changelog
 
+### Update 1.5.0 — 2026-03-04
+
+#### Critical Fix: Push Notifications Now Deliver to Device
+- **Root Cause Found**: `pushSender.js` sent single messages as a plain object to Expo, but expected an array response. Expo returns `{data: {...}}` (object) for single sends and `{data: [...]}` (array) for batch sends. Every push was rejected as `INVALID_RESPONSE` even though Expo accepted it.
+- **Fix Applied**: Single pushes now send as `JSON.stringify([message])` (always an array) and the response parser handles both object and array shapes.
+- **FCM Integration**: Added `google-services.json` for Firebase Cloud Messaging — required for Android push delivery. Expo Push routes through FCM, which needs the Firebase config baked into the APK.
+- **FCM API Key Uploaded**: Legacy FCM server key registered with Expo via `eas credentials` so Expo can authenticate with Firebase when forwarding pushes.
+- **`push_tokens` Table Seeded**: Existing token from `users.push_token` was migrated into the `push_tokens` table for multi-device support.
+- **Full Pipeline Verified**: Tested locally — DB insert ✅, Socket emit ✅, Expo HTTP 200 ✅, ticket received ✅, audit log written ✅.
+
+#### Supabase Config Alignment
+- **Environment Variable Rename**: Backend `supabase.js` now reads `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` instead of the old `SUPABASE_URL` / `SUPABASE_KEY` — matches the `.env` file that was already using the `EXPO_PUBLIC_` prefix.
+
+---
+
 ### Update 1.4.0 — 2026-03-04
 
 #### Feature: Gemini-Powered Personality Analysis
@@ -255,13 +270,21 @@ npm run dev
 
 ### Environment Variables (Backend .env)
 ```
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_anon_key
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_KEY=your_supabase_service_role_key
 JWT_SECRET=your_jwt_secret
 PORT=5000
 CLIENT_URL=*
 GEMINI_API_KEY=your_google_gemini_api_key
+EXPO_ACCESS_TOKEN=your_expo_access_token (optional, improves push reliability)
 ```
+
+### Firebase Setup (Required for Android Push)
+1. Create a project at [Firebase Console](https://console.firebase.google.com/)
+2. Add an Android app with package name `com.aninex.app`
+3. Download `google-services.json` and place it in the `app/` directory
+4. Upload your FCM Server Key to Expo: `eas credentials --platform android`
+5. Rebuild: `eas build --platform android --profile preview`
 
 ---
 
@@ -274,8 +297,9 @@ GEMINI_API_KEY=your_google_gemini_api_key
 - **Servers** — Create/join anime-themed servers with channels
 - **Server Chat** — Real-time channel messaging with mentions, reactions, replies
 - **Posts** — Create text or image posts with @mentions, tags, categories, and privacy controls
-- **Push Notifications** — Friend requests, DMs, server messages, @mentions (Expo Push)
+- **Push Notifications** — Friend requests, DMs, server messages, @mentions, daily facts (Expo Push → FCM)
 - **In-App Notifications** — Toast-style notifications with navigation
+- **AI Personality Analysis** — Gemini 1.5 Pro powered anime character matching with psychological reasoning
 - **Update Notes** — "What's New" modal with version-aware dismissal
 - **Gamification** — Daily login streaks, XP system, profile levels, and unlockable badges
 - **Automated Campaigns** — Daily anime facts and friend activity push alerts (Backend controlled)
@@ -297,9 +321,19 @@ GEMINI_API_KEY=your_google_gemini_api_key
 1. On login, the app requests notification permission via `expo-device` + `expo-notifications`
 2. The Expo push token is sent to the backend and stored in both `push_tokens` table (multi-device) and legacy `users.push_token`
 3. When events occur, `notificationController` → `notificationService` → `pushSender` pipeline handles: dedup → rate-limit → DB insert → Socket emit → multi-device push delivery
-4. Invalid tokens are auto-cleaned on `DeviceNotRegistered` errors
-5. All push activity is audited in `push_send_log` for debugging
-6. Tapping a notification navigates to the relevant screen via deep linking
+4. `pushSender.js` sends to Expo Push API as array format, handles both object/array responses
+5. Expo forwards to FCM (Android) / APNs (iOS) — requires `google-services.json` in the APK
+6. Invalid tokens are auto-cleaned on `DeviceNotRegistered` errors
+7. All push activity is audited in `push_send_log` for debugging
+8. Tapping a notification navigates to the relevant screen via deep linking
+
+### AI Personality Analysis Flow
+1. User provides a self-description during onboarding or from the identity screen
+2. `POST /api/users/analyze-personality` sends the description to `personalityAI.js`
+3. `personalityAI.js` calls `geminiService.js` → Google Gemini 1.5 Pro with a 10-dimension psychological reasoning prompt
+4. Response is validated (all required fields, valid rank, real anime character) before returning
+5. On failure, a safe fallback response is returned — server never crashes
+6. Frontend maps the result to the user's anime identity (character, rank, archetype, title)
 
 ### Message Sending (Server Chat)
 - Messages are sent via Socket.IO (`message:send` event), not REST

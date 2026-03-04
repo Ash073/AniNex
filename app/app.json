@@ -28,6 +28,7 @@
     },
     "android": {
       "package": "com.aninex.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo/AniNex (1).png",
         "backgroundColor": "#000000"
