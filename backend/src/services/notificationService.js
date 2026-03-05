@@ -418,7 +418,8 @@ async function getUserPushTokens(userId) {
     const { data: tokenRows, error: ptError } = await supabase
       .from('push_tokens')
       .select('token, device_id')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('is_active', true);
 
     if (!ptError && tokenRows && tokenRows.length > 0) {
       return tokenRows;
