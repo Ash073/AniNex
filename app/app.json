@@ -66,13 +66,8 @@
       "expo-web-browser",
       "expo-font",
       "expo-image-picker",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/logo/AniNex (1).png",
-          "color": "#6366f1"
-        }
-      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       "expo-secure-store"
     ],
     "extra": {

@@ -5,8 +5,10 @@ import { useAuthStore } from '@/store/authStore';
 import { useNotification } from '@/components/NotificationProvider';
 import {
   registerForPushNotificationsAsync,
-  addNotificationReceivedListener,
-  addNotificationResponseReceivedListener,
+  onForegroundMessage,
+  onNotificationOpenedApp,
+  getInitialNotification,
+  onTokenRefresh,
   markNotificationHandled,
   wasAlreadyHandled,
 } from '@/utils/pushNotifications';
@@ -98,108 +100,118 @@ function navigateToNotification(data: any, body?: string | null): void {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  HELPER: send FCM token to backend
+// ═════════════════════════════════════════════════════════════
+async function sendTokenToBackend(token: string): Promise<void> {
+  await api.post('/users/push-token', {
+    token,
+    platform: Platform.OS,
+  });
+  console.log('[FCM] Token registered with backend');
+}
+
+// ═════════════════════════════════════════════════════════════
 //  useNotifications HOOK
 //
 //  Responsibilities:
-//    1. Register push token with backend (once per app lifecycle)
+//    1. Register FCM token with backend (once per app lifecycle)
 //    2. Listen for foreground push → show in-app toast (deduped)
 //    3. Listen for notification tap → navigate to target screen
-//
-//  This hook is the ONLY place that sets up push listeners.
-//  Socket events handle real-time data sync, NOT display.
+//    4. Handle app opened from killed state via notification tap
+//    5. Listen for token refresh → re-register with backend
 // ═════════════════════════════════════════════════════════════
 export const useNotifications = () => {
   const { user } = useAuthStore();
   const { showNotification } = useNotification();
-  const notificationListener = useRef<any>(null);
-  const responseListener = useRef<any>(null);
+  const initialChecked = useRef(false);
 
   useEffect(() => {
     if (!user?.id) return;
 
-    // ─── 1. REGISTER PUSH TOKEN (once per app lifecycle) ─────
+    const unsubscribers: (() => void)[] = [];
+
+    // ─── 1. REGISTER FCM TOKEN (once per app lifecycle) ──────
     if (!tokenRegistered) {
       const registerToken = async () => {
         try {
-          console.log('[Notifications] Registering push token...');
+          console.log('[FCM] Registering push token...');
           const token = await registerForPushNotificationsAsync();
 
           if (!token) {
-            console.warn('[Notifications] No token received — push disabled');
+            console.warn('[FCM] No token received — push disabled');
             return;
           }
 
-          // POST to backend — writes to push_tokens table + users.push_token
-          await api.post('/users/push-token', {
-            token,
-            platform: Platform.OS,   // 'ios' | 'android'
-          });
-
+          await sendTokenToBackend(token);
           tokenRegistered = true;
-          console.log('[Notifications] Token registered with backend successfully');
         } catch (err: any) {
-          console.error('[Notifications] Token registration failed:', err?.message || err);
-          // Don't set tokenRegistered — will retry on next mount
+          console.error('[FCM] Token registration failed:', err?.message || err);
         }
       };
       registerToken();
     }
 
-    // ─── 2. FOREGROUND PUSH LISTENER (with dedup) ────────────
-    // Only attach listeners once even if effect re-runs
+    // ─── 2. FOREGROUND MESSAGE LISTENER (with dedup) ─────────
     if (!listenersAttached) {
-      notificationListener.current = addNotificationReceivedListener((notification) => {
-        const { title, body, data } = notification.request.content;
-        const notifId = (data as any)?.notificationId || '';
+      // FCM foreground: data-only messages and notification+data messages
+      const unsubForeground = onForegroundMessage((remoteMessage) => {
+        const { notification, data } = remoteMessage;
+        const title = notification?.title || (data?.title as string) || 'New Notification';
+        const body = notification?.body || (data?.body as string) || '';
+        const notifId = (data?.notificationId as string) || '';
 
-        console.log('[Notifications] Push received in foreground:', {
-          title,
-          type: (data as any)?.type,
-          notifId,
-        });
+        console.log('[FCM] Foreground message:', { title, type: data?.type, notifId });
 
-        // Dedup: skip if this exact notification was already handled
         if (notifId && wasAlreadyHandled(notifId)) {
-          console.log('[Notifications] Skipping duplicate:', notifId);
+          console.log('[FCM] Skipping duplicate:', notifId);
           return;
         }
-
-        // Mark as handled to prevent socket-side duplicate
         if (notifId) markNotificationHandled(notifId);
 
-        // Show in-app toast
         showNotification({
-          title: title || 'New Notification',
-          body: body || '',
-          avatar: (data as any)?.senderAvatar as string,
+          title,
+          body,
+          avatar: data?.senderAvatar as string,
           onPress: () => navigateToNotification(data, body),
         });
       });
+      unsubscribers.push(unsubForeground);
 
-      // ─── 3. TAP / RESPONSE LISTENER ─────────────────────────
-      // Fires when user taps notification (foreground, background, or killed)
-      responseListener.current = addNotificationResponseReceivedListener((response) => {
-        const { data, body } = response.notification.request.content;
-        console.log('[Notifications] User tapped notification:', {
-          type: (data as any)?.type,
-          notifId: (data as any)?.notificationId,
-        });
-        navigateToNotification(data, body);
+      // ─── 3. BACKGROUND TAP LISTENER ──────────────────────────
+      const unsubOpened = onNotificationOpenedApp((remoteMessage) => {
+        const { data, notification } = remoteMessage;
+        console.log('[FCM] Notification opened app:', { type: data?.type });
+        navigateToNotification(data, notification?.body || null);
       });
+      unsubscribers.push(unsubOpened);
+
+      // ─── 4. KILLED-STATE TAP (check once) ────────────────────
+      if (!initialChecked.current) {
+        initialChecked.current = true;
+        getInitialNotification().then((remoteMessage) => {
+          if (remoteMessage) {
+            console.log('[FCM] App opened from killed state via notification');
+            navigateToNotification(remoteMessage.data, remoteMessage.notification?.body || null);
+          }
+        });
+      }
+
+      // ─── 5. TOKEN REFRESH LISTENER ───────────────────────────
+      const unsubTokenRefresh = onTokenRefresh(async (newToken) => {
+        console.log('[FCM] Token refreshed, re-registering...');
+        try {
+          await sendTokenToBackend(newToken);
+        } catch (err: any) {
+          console.error('[FCM] Token refresh registration failed:', err?.message);
+        }
+      });
+      unsubscribers.push(unsubTokenRefresh);
 
       listenersAttached = true;
     }
 
-    // Cleanup listeners on unmount
     return () => {
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-        notificationListener.current = null;
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-        responseListener.current = null;
-      }
+      unsubscribers.forEach((unsub) => unsub());
       listenersAttached = false;
     };
   }, [user?.id]);
