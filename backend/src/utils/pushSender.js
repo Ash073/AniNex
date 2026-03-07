@@ -1,271 +1,144 @@
 /**
  * pushSender.js
  *
- * Low-level Expo Push API HTTP client.
- * Handles single sends, batch sends, retries with exponential backoff,
- * and automatic cleanup of invalid tokens.
+ * Low-level Firebase Cloud Messaging (FCM) push sender via firebase-admin.
+ * Handles single sends, batch sends, and automatic cleanup of invalid tokens.
  *
  * No business logic. No database reads for user data.
- * Only responsibility: deliver messages to Expo and report results.
+ * Only responsibility: deliver messages to FCM and report results.
  */
 
-const fetch = require('node-fetch');
+const admin = require('../config/firebase');
 const { supabase } = require('../config/supabase');
-
-// ─── Configuration ───────────────────────────────────────────
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
-const EXPO_BATCH_LIMIT = 100;        // Expo accepts up to 100 messages per request
-const MAX_RETRIES = 3;               // Maximum retry attempts
-const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff delays (ms)
-const BATCH_DELAY_MS = 250;          // Delay between batches to avoid rate limits
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ─── Headers ─────────────────────────────────────────────────
-
-/**
- * Build HTTP headers for Expo Push API.
- * Includes optional access token if configured.
- */
-function buildHeaders() {
-  const headers = {
-    'Accept': 'application/json',
-    'Accept-Encoding': 'gzip, deflate',
-    'Content-Type': 'application/json',
-  };
-  const accessToken = process.env.EXPO_ACCESS_TOKEN;
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
-  return headers;
-}
 
 // ─── Message Builder ─────────────────────────────────────────
 
 /**
- * Build an Expo push message object with all required fields.
+ * Build an FCM message object with notification + data payload.
  *
- * @param {string} pushToken   - ExponentPushToken[xxx]
- * @param {string} title       - Notification title (required)
- * @param {string} body        - Notification body (required, must be string)
- * @param {object} data        - Custom data payload
- * @param {string} channelId   - Android notification channel
- * @returns {object} Expo push message object
+ * @param {string} pushToken   - FCM device registration token
+ * @param {string} title       - Notification title
+ * @param {string} body        - Notification body
+ * @param {object} data        - Custom data payload (all values must be strings)
+ * @param {string} channelId   - Android notification channel ID
+ * @returns {object} FCM message object for admin.messaging().send()
  */
 function buildMessage(pushToken, title, body, data = {}, channelId = 'default') {
-  // Enforce title and body are always strings
   const safeTitle = (typeof title === 'string' && title.trim()) ? title.trim() : 'AniNeX';
   const safeBody = (typeof body === 'string' && body.trim()) ? body.trim() : 'New notification';
 
+  // FCM data values must ALL be strings
+  const stringData = {};
+  for (const [key, value] of Object.entries(data)) {
+    stringData[key] = typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
   return {
-    to: pushToken,
-    sound: 'default',
-    title: safeTitle,
-    body: safeBody,
-    data: {
-      ...data,
-      _displayInForeground: true,
+    token: pushToken,
+    notification: {
+      title: safeTitle,
+      body: safeBody,
     },
-    channelId: channelId || 'default',
-    priority: 'high',
-    badge: 1,
+    data: stringData,
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: channelId || 'default',
+        sound: 'default',
+        priority: 'high',
+      },
+    },
   };
 }
 
 // ─── Single Push ─────────────────────────────────────────────
 
 /**
- * Send a single push notification to Expo with retry logic.
+ * Send a single push notification via FCM.
  *
- * @param {object} message - Built Expo push message object
- * @returns {Promise<{ success: boolean, ticketId?: string, error?: string, errorType?: string }>}
+ * @param {object} message - Built FCM message object from buildMessage()
+ * @returns {Promise<{ success: boolean, messageId?: string, error?: string, errorType?: string }>}
  */
 async function sendSinglePush(message) {
-  const tokenSuffix = message.to ? message.to.slice(-8) : 'unknown';
+  const tokenSuffix = message.token ? message.token.slice(-8) : 'unknown';
   const logPrefix = `[PushSender:single:...${tokenSuffix}]`;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      console.log(`${logPrefix} Attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+  try {
+    console.log(`${logPrefix} Sending via FCM`);
+    const messageId = await admin.messaging().send(message);
+    console.log(`${logPrefix} Sent successfully (messageId: ${messageId})`);
+    return { success: true, messageId };
+  } catch (err) {
+    const errorCode = err.code || '';
+    console.error(`${logPrefix} FCM error: ${err.message} [${errorCode}]`);
 
-      const response = await fetch(EXPO_PUSH_URL, {
-        method: 'POST',
-        headers: buildHeaders(),
-        body: JSON.stringify([message]),  // Always send as array for consistent response format
-      });
-
-      console.log(`${logPrefix} HTTP ${response.status}`);
-
-      // Rate limited — retry with backoff
-      if (response.status === 429) {
-        const delay = RETRY_DELAYS[attempt];
-        if (delay) {
-          console.warn(`${logPrefix} Rate limited, retrying in ${delay}ms`);
-          await sleep(delay);
-          continue;
-        }
-        console.error(`${logPrefix} Rate limited — all retries exhausted`);
-        return { success: false, error: 'RATE_LIMITED', errorType: 'RateLimited' };
-      }
-
-      // Non-OK HTTP status
-      if (!response.ok) {
-        const text = await response.text();
-        console.error(`${logPrefix} HTTP error: ${text.substring(0, 200)}`);
-        return { success: false, error: `HTTP_${response.status}`, errorType: 'HttpError' };
-      }
-
-      // Parse response
-      const result = await response.json();
-
-      // Expo returns { data: { ... } } for single message,
-      // or { data: [ {...}, {...} ] } for array of messages.
-      // Normalize to always work with a single ticket.
-      let ticket;
-      if (Array.isArray(result.data) && result.data.length > 0) {
-        ticket = result.data[0];
-      } else if (result.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
-        ticket = result.data;
-      } else {
-        console.error(`${logPrefix} Unexpected response shape:`, JSON.stringify(result).substring(0, 200));
-        return { success: false, error: 'INVALID_RESPONSE', errorType: 'InvalidResponse' };
-      }
-
-      // Success
-      if (ticket.status === 'ok') {
-        console.log(`${logPrefix} Queued successfully (ticket: ${ticket.id})`);
-        return { success: true, ticketId: ticket.id };
-      }
-
-      // Expo error
-      if (ticket.status === 'error') {
-        const errorType = ticket.details?.error || 'UnknownError';
-        console.error(`${logPrefix} Expo error: ${ticket.message} [${errorType}]`);
-
-        // Auto-cleanup stale tokens
-        if (errorType === 'DeviceNotRegistered' || errorType === 'InvalidCredentials') {
-          await removeInvalidToken(message.to, logPrefix);
-        }
-
-        return { success: false, error: ticket.message, errorType };
-      }
-
-      console.warn(`${logPrefix} Unknown ticket status:`, ticket);
-      return { success: false, error: 'UNKNOWN_TICKET_STATUS', errorType: 'Unknown' };
-
-    } catch (err) {
-      // Network error — retry
-      if (attempt < MAX_RETRIES && RETRY_DELAYS[attempt]) {
-        console.warn(`${logPrefix} Network error, retrying in ${RETRY_DELAYS[attempt]}ms:`, err.message);
-        await sleep(RETRY_DELAYS[attempt]);
-        continue;
-      }
-      console.error(`${logPrefix} Network error — all retries exhausted:`, err.message);
-      return { success: false, error: err.message, errorType: 'NetworkError' };
+    // Auto-cleanup stale/invalid tokens
+    if (
+      errorCode === 'messaging/registration-token-not-registered' ||
+      errorCode === 'messaging/invalid-registration-token' ||
+      errorCode === 'messaging/invalid-argument'
+    ) {
+      await removeInvalidToken(message.token, logPrefix);
+      return { success: false, error: err.message, errorType: 'InvalidToken' };
     }
-  }
 
-  return { success: false, error: 'MAX_RETRIES_EXCEEDED', errorType: 'MaxRetries' };
+    return { success: false, error: err.message, errorType: errorCode || 'FCMError' };
+  }
 }
 
 // ─── Batch Push ──────────────────────────────────────────────
 
 /**
- * Send push notifications in batches of up to 100 (Expo limit).
- * Used for bulk sends like daily facts.
+ * Send push notifications in batches of up to 500 (FCM limit).
  *
- * @param {Array<object>} messages - Array of built Expo push message objects
- * @returns {Promise<Array<{ success: boolean, ticketId?: string, error?: string, errorType?: string }>>}
+ * @param {Array<object>} messages - Array of built FCM message objects
+ * @returns {Promise<Array<{ success: boolean, messageId?: string, error?: string, errorType?: string }>>}
  */
 async function sendBatchPush(messages) {
-  if (!messages || messages.length === 0) {
-    return [];
-  }
+  if (!messages || messages.length === 0) return [];
 
+  const FCM_BATCH_LIMIT = 500;
   const results = [];
-  let batchRetryCount = 0;
-  const MAX_BATCH_RETRIES = 2;
 
-  for (let i = 0; i < messages.length; i += EXPO_BATCH_LIMIT) {
-    const batch = messages.slice(i, i + EXPO_BATCH_LIMIT);
-    const batchNum = Math.floor(i / EXPO_BATCH_LIMIT) + 1;
-    const totalBatches = Math.ceil(messages.length / EXPO_BATCH_LIMIT);
+  for (let i = 0; i < messages.length; i += FCM_BATCH_LIMIT) {
+    const batch = messages.slice(i, i + FCM_BATCH_LIMIT);
+    const batchNum = Math.floor(i / FCM_BATCH_LIMIT) + 1;
+    const totalBatches = Math.ceil(messages.length / FCM_BATCH_LIMIT);
     const logPrefix = `[PushSender:batch:${batchNum}/${totalBatches}]`;
 
     try {
-      console.log(`${logPrefix} Sending ${batch.length} messages`);
+      console.log(`${logPrefix} Sending ${batch.length} messages via FCM`);
+      const response = await admin.messaging().sendEach(batch);
 
-      const response = await fetch(EXPO_PUSH_URL, {
-        method: 'POST',
-        headers: buildHeaders(),
-        body: JSON.stringify(batch),
+      response.responses.forEach((resp, idx) => {
+        if (resp.success) {
+          results.push({ success: true, messageId: resp.messageId });
+        } else {
+          const errorCode = resp.error?.code || '';
+          const errorMsg = resp.error?.message || 'Unknown error';
+
+          if (
+            errorCode === 'messaging/registration-token-not-registered' ||
+            errorCode === 'messaging/invalid-registration-token'
+          ) {
+            removeInvalidToken(batch[idx].token, logPrefix).catch(() => {});
+          }
+
+          results.push({ success: false, error: errorMsg, errorType: errorCode });
+        }
       });
 
-      console.log(`${logPrefix} HTTP ${response.status}`);
-
-      // Rate limited — retry this batch (with limit to prevent infinite loop)
-      if (response.status === 429) {
-        if (batchRetryCount < MAX_BATCH_RETRIES) {
-          batchRetryCount++;
-          const delay = 5000 * batchRetryCount;
-          console.warn(`${logPrefix} Rate limited, retry ${batchRetryCount}/${MAX_BATCH_RETRIES} in ${delay}ms`);
-          await sleep(delay);
-          i -= EXPO_BATCH_LIMIT; // retry this batch
-          continue;
-        }
-        console.error(`${logPrefix} Rate limited — max batch retries exhausted`);
-        batch.forEach(() => results.push({ success: false, error: 'RATE_LIMITED', errorType: 'RateLimited' }));
-        batchRetryCount = 0; // Reset for next batch
-        continue;
-      }
-
-      batchRetryCount = 0; // Reset on success
-
-      // HTTP error
-      if (!response.ok) {
-        const text = await response.text();
-        console.error(`${logPrefix} HTTP error: ${text.substring(0, 200)}`);
-        batch.forEach(() => results.push({ success: false, error: `HTTP_${response.status}`, errorType: 'HttpError' }));
-        continue;
-      }
-
-      // Parse tickets
-      const result = await response.json();
-      const tickets = result.data || [];
-
-      for (let j = 0; j < batch.length; j++) {
-        const ticket = tickets[j];
-        if (!ticket) {
-          results.push({ success: false, error: 'MISSING_TICKET', errorType: 'MissingTicket' });
-          continue;
-        }
-
-        if (ticket.status === 'ok') {
-          results.push({ success: true, ticketId: ticket.id });
-        } else {
-          const errorType = ticket.details?.error || 'UnknownError';
-          if (errorType === 'DeviceNotRegistered' || errorType === 'InvalidCredentials') {
-            removeInvalidToken(batch[j].to, logPrefix).catch(() => {});
-          }
-          results.push({ success: false, error: ticket.message, errorType });
-        }
-      }
-
+      console.log(`${logPrefix} ${response.successCount} sent, ${response.failureCount} failed`);
     } catch (err) {
-      console.error(`${logPrefix} Network error:`, err.message);
-      batch.forEach(() => results.push({ success: false, error: err.message, errorType: 'NetworkError' }));
-    }
-
-    // Small delay between batches to avoid rate limits
-    if (i + EXPO_BATCH_LIMIT < messages.length) {
-      await sleep(BATCH_DELAY_MS);
+      console.error(`${logPrefix} Batch error:`, err.message);
+      batch.forEach(() =>
+        results.push({ success: false, error: err.message, errorType: 'BatchError' }),
+      );
     }
   }
 
-  const sent = results.filter(r => r.success).length;
-  const failed = results.filter(r => !r.success).length;
+  const sent = results.filter((r) => r.success).length;
+  const failed = results.filter((r) => !r.success).length;
   console.log(`[PushSender:batch] Complete: ${sent} sent, ${failed} failed out of ${messages.length}`);
 
   return results;
@@ -276,15 +149,11 @@ async function sendBatchPush(messages) {
 /**
  * Remove an invalid push token from BOTH the push_tokens table
  * and the legacy users.push_token column.
- *
- * @param {string} pushToken
- * @param {string} logPrefix
  */
 async function removeInvalidToken(pushToken, logPrefix = '[PushSender]') {
   if (!pushToken) return;
 
   try {
-    // Remove from push_tokens table
     const { error: ptError } = await supabase
       .from('push_tokens')
       .delete()
@@ -296,32 +165,25 @@ async function removeInvalidToken(pushToken, logPrefix = '[PushSender]') {
       console.log(`${logPrefix} Removed invalid token from push_tokens: ...${pushToken.slice(-8)}`);
     }
 
-    // Also clear from legacy users.push_token column
     const { error: userError } = await supabase
       .from('users')
-      .update({ push_token: null, push_token_updated_at: new Date().toISOString() })
+      .update({ push_token: null })
       .eq('push_token', pushToken);
 
     if (userError) {
-      console.warn(`${logPrefix} Failed to clear legacy token from users:`, userError.message);
+      console.warn(`${logPrefix} Failed to clear users.push_token:`, userError.message);
     }
   } catch (err) {
-    console.error(`${logPrefix} removeInvalidToken exception:`, err.message);
+    console.error(`${logPrefix} removeInvalidToken error:`, err.message);
   }
 }
 
-// ─── Backward-compat wrapper ─────────────────────────────────
 /**
- * Legacy sendExpoPush function for existing debug scripts.
+ * Backward-compatible wrapper matching the old sendExpoPush(token, title, body, data) signature.
+ * Used by debug scripts.
  */
-async function sendExpoPush(pushToken, title, body, data = {}, channelId = 'default') {
-  const { validateToken } = require('./pushValidator');
-  const check = validateToken(pushToken);
-  if (!check.valid) {
-    console.warn('[PushSender] Invalid token, skipping:', check.reason);
-    return { success: false, error: check.reason };
-  }
-  const message = buildMessage(pushToken, title, body, data, channelId);
+async function sendExpoPush(token, title, body, data = {}) {
+  const message = buildMessage(token, title, body, data);
   return sendSinglePush(message);
 }
 

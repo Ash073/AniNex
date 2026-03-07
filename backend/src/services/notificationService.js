@@ -193,7 +193,7 @@ async function sendNotification({
       }
     }
 
-    // ── 6. Expo Push (multi-device) ──────────────────────────
+    // ── 6. FCM Push (multi-device) ──────────────────────
     let pushResults = [];
 
     if (!silent) {
@@ -250,10 +250,10 @@ async function sendNotification({
 
         // Update push_status on notification row
         const anySuccess = pushResults.some(r => r.success);
-        const firstTicket = pushResults.find(r => r.ticketId)?.ticketId || null;
+        const firstMessageId = pushResults.find(r => r.messageId)?.messageId || null;
 
         if (anySuccess) {
-          await updatePushStatus(notification?.id, 'sent', firstTicket);
+          await updatePushStatus(notification?.id, 'sent', firstMessageId);
         } else if (pushResults.length > 0) {
           await updatePushStatus(notification?.id, 'failed');
         }
@@ -479,13 +479,13 @@ function checkRateLimit(userId) {
  * Update push_status on a notification row.
  * @param {string|null} notificationId
  * @param {string} status - 'pending' | 'sent' | 'failed' | 'skipped'
- * @param {string|null} ticketId
+ * @param {string|null} messageId
  */
-async function updatePushStatus(notificationId, status, ticketId = null) {
+async function updatePushStatus(notificationId, status, messageId = null) {
   if (!notificationId) return;
   try {
     const update = { push_status: status };
-    if (ticketId) update.push_ticket_id = ticketId;
+    if (messageId) update.push_ticket_id = messageId;
     await supabase.from('notifications').update(update).eq('id', notificationId);
   } catch (e) {
     console.error('[NotifService] updatePushStatus error:', e.message);
@@ -504,7 +504,7 @@ async function logPushAudit({ userId, type, title, body, pushToken, idempotencyK
       body: body || null,
       push_token: pushToken || null,
       idempotency_key: idempotencyKey || null,
-      push_ticket_id: pushResult?.ticketId || null,
+      push_ticket_id: pushResult?.messageId || null,
       status: pushResult?.success ? 'sent' : 'failed',
       error_message: pushResult?.error || null,
     });

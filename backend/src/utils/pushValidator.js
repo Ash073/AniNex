@@ -12,7 +12,8 @@
  */
 
 // ─── Constants ───────────────────────────────────────────────
-const EXPO_TOKEN_REGEX = /^ExponentPushToken\[.+\]$/;
+// FCM tokens are typically 100-300 char alphanumeric strings with colons/hyphens/underscores
+const FCM_TOKEN_REGEX = /^[a-zA-Z0-9_:!\-]{50,400}$/;
 
 const VALID_NOTIFICATION_TYPES = new Set([
   'dm',
@@ -36,7 +37,7 @@ const MAX_DATA_SIZE_BYTES = 4096;
 // ─── Token Validation ────────────────────────────────────────
 
 /**
- * Validate an Expo push token format.
+ * Validate an FCM device registration token format.
  * @param {string} token
  * @returns {{ valid: boolean, reason?: string }}
  */
@@ -48,7 +49,7 @@ function validateToken(token) {
   if (trimmed.length === 0) {
     return { valid: false, reason: 'TOKEN_EMPTY' };
   }
-  if (!EXPO_TOKEN_REGEX.test(trimmed)) {
+  if (!FCM_TOKEN_REGEX.test(trimmed)) {
     return { valid: false, reason: `INVALID_TOKEN_FORMAT: ${trimmed.substring(0, 30)}` };
   }
   return { valid: true };
