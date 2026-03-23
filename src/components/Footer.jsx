@@ -1,5 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { MessageCircle, Globe, Shield, HelpCircle, Code, Activity } from 'lucide-react';
+
+/* 
+  Vite/Lucide Compatibility Fix Level 2: 
+  Twitter and Github exports are failing. 
+  Using Globe, Code and MessageCircle as a reliable alternatives.
+*/
 
 const Footer = () => {
   const footerStyle = {
@@ -18,31 +25,36 @@ const Footer = () => {
   };
 
   const titleStyle = {
-    fontSize: '20px',
+    fontSize: '18px',
     fontWeight: '800',
     color: '#fff',
     marginBottom: '32px',
-    letterSpacing: '-0.5px',
+    letterSpacing: '1px',
+    fontFamily: "'Syncopate', sans-serif"
   };
 
   const linkListStyle = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-    fontSize: '15px',
-    fontWeight: '500',
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '16px', 
+    fontSize: '14px', 
+    fontWeight: '500', 
+    fontFamily: 'var(--font-sub)'
   };
 
   const linkStyle = {
     color: 'rgba(255,255,255,0.4)',
     transition: 'all 0.3s ease',
     textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
   };
 
   return (
     <footer style={footerStyle}>
       <div className="mesh-bg" style={{ opacity: 0.5 }}></div>
-      <div style={gridStyle}>
+      <div style={gridStyle} className="grid-3">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
             <div style={{ 
@@ -62,46 +74,47 @@ const Footer = () => {
                 style={{ width: '130%', height: '130%', objectFit: 'contain' }} 
               />
             </div>
-            <span className="gradient-text" style={{ fontSize: '26px' }}>AniNex</span>
+            <span className="gradient-text" style={{ fontSize: '22px', fontFamily: "'Syncopate', sans-serif" }}>AniNex</span>
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '16px', lineHeight: '1.8', maxWidth: '320px' }}>
-            Elevating the anime communication experience through state-of-the-art tech and fluid design. Join the next generation.
+          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '15px', lineHeight: '1.8', maxWidth: '320px', fontFamily: 'var(--font-sub)' }}>
+            Elevating the anime communication experience through state-of-the-art tech and fluid design. Join the next generation of fandom connectivity.
           </p>
         </div>
         <div>
-          <h3 style={titleStyle}>The Product</h3>
+          <h3 style={titleStyle}>Product</h3>
           <div style={linkListStyle}>
-            <Link to="/download" style={linkStyle}>Download Mobile</Link>
-            <Link to="/" style={linkStyle}>Features Guide</Link>
-            <Link to="/about" style={linkStyle}>Our Vision</Link>
+            <Link to="/download" style={linkStyle}><Globe size={14}/> Mobile Portal</Link>
+            <Link to="/" style={linkStyle}><Shield size={14}/> Security Features</Link>
+            <Link to="/about" style={linkStyle}><HelpCircle size={14}/> Vision & Story</Link>
           </div>
         </div>
         <div>
-          <h3 style={titleStyle}>Community HUB</h3>
+          <h3 style={titleStyle}>Community</h3>
           <div style={linkListStyle}>
-            <a href="https://discord.gg/AniNex" style={linkStyle}>Discord Servers</a>
-            <a href="https://twitter.com/AniNex" style={linkStyle}>Twitter Updates</a>
-            <a href="https://reddit.com/r/AniNex" style={linkStyle}>Reddit Lounge</a>
+            <a href="https://discord.gg/AniNex" style={linkStyle}><MessageCircle size={14}/> Discord Feed</a>
+            <a href="https://twitter.com/AniNex" style={linkStyle}><Globe size={14}/> Twitter updates</a>
+            <a href="https://github.com/Ash073/AniNex" style={linkStyle}><Code size={14}/> Source Logs</a>
           </div>
         </div>
         <div>
-          <h3 style={titleStyle}>About Company</h3>
+          <h3 style={titleStyle}>Legal</h3>
           <div style={linkListStyle}>
-            <Link to="/about" style={linkStyle}>Our Story</Link>
-            <Link to="/blogs" style={linkStyle}>Update Logs</Link>
-            <Link to="/privacy" style={linkStyle}>Privacy Center</Link>
+            <Link to="/about" style={linkStyle}>Privacy Center</Link>
+            <Link to="/blogs" style={linkStyle}>Update Hub</Link>
+            <Link to="/privacy" style={linkStyle}>Terms of Sync</Link>
           </div>
         </div>
       </div>
       
-      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '60px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.3)', fontSize: '13px', fontWeight: '500' }}>
-        <p>&copy; 2026 AniNex Inc. Refined with &hearts; for the community.</p>
+      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '60px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.3)', fontSize: '12px', fontWeight: 'bold', fontFamily: 'var(--font-sub)', letterSpacing: '1px' }}>
+        <p>&copy; 2026 ANINEX INFRASTRUCTURE. ALL RIGHTS RESERVED.</p>
         <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-          <span style={{ cursor: 'pointer', transition: 'color 0.3s ease' }}>Terms of Service</span>
-          <span style={{ cursor: 'pointer', transition: 'color 0.3s ease' }}>Cookie Settings</span>
+          <span style={{ cursor: 'pointer', transition: 'color 0.3s ease' }}>TERMS</span>
+          <span style={{ cursor: 'pointer', transition: 'color 0.3s ease' }}>PRIVACY</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-             <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgb(34, 197, 94)' }}></span>
-             <span>Network Online</span>
+             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgb(34, 197, 94)', boxShadow: '0 0 10px rgb(34, 197, 94)' }}></span>
+             <Activity size={12} color="rgb(34, 197, 94)"/>
+             <span>LIVE NETWORK</span>
           </div>
         </div>
       </div>

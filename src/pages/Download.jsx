@@ -1,8 +1,8 @@
 import React from 'react';
 import Layout from '../components/Layout';
 import { motion } from 'framer-motion';
+import { Smartphone, Monitor, Globe, Download as DownloadIcon, Lock, Terminal, Box } from 'lucide-react';
 
-// Requirement 12 & 13: GitHub Release link variable
 const DOWNLOAD_LINK = "https://github.com/Ash073/AniNex/releases/download/v1.5.0/aninex-v1.5.0.apk";
 
 const Download = () => {
@@ -12,7 +12,7 @@ const Download = () => {
       version: 'v1.5.0',
       date: 'March 2026',
       size: '112 MB',
-      icon: '📱',
+      icon: <Smartphone size={48} color="var(--primary)"/>,
       link: DOWNLOAD_LINK,
       status: 'Stable'
     },
@@ -21,7 +21,7 @@ const Download = () => {
       version: 'v1.2.0',
       date: 'TBA',
       size: 'Coming soon',
-      icon: '💻',
+      icon: <Monitor size={48} color="var(--secondary)"/>,
       link: '#',
       status: 'Development'
     },
@@ -30,7 +30,7 @@ const Download = () => {
       version: 'Beta',
       date: 'TBA',
       size: 'Cloud',
-      icon: '🌐',
+      icon: <Globe size={48} color="var(--accent)"/>,
       link: '#',
       status: 'Waitlist'
     }
@@ -38,8 +38,7 @@ const Download = () => {
 
   return (
     <Layout>
-      <div className="mesh-bg"></div>
-      <section style={{ padding: '80px 10%', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', position: 'relative' }}>
+      <section style={{ padding: '80px 10%', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', position: 'relative', zIndex: 10 }}>
 
         {/* Glow Effects */}
         <div style={{ position: 'absolute', top: '20%', left: '50%', transform: 'translate(-50%, -50%)', width: '500px', height: '500px', background: 'var(--primary)', filter: 'blur(150px)', opacity: '0.15', zIndex: -1 }}></div>
@@ -59,7 +58,7 @@ const Download = () => {
         </motion.div>
 
         {/* Main Download Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px', width: '100%', maxWidth: '1200px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px', width: '100%', maxWidth: '1200px', position: 'relative', zIndex: 20 }} className="grid-3">
           {platforms.map((platform, i) => (
             <motion.div
               key={platform.name}
@@ -70,7 +69,7 @@ const Download = () => {
               className="glass-panel"
               style={{ padding: '48px 40px', textAlign: 'center' }}
             >
-              <div style={{ fontSize: '56px', marginBottom: '32px' }}>{platform.icon}</div>
+              <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'center' }}>{platform.icon}</div>
               <h3 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '4px' }}>{platform.name}</h3>
               <div style={{ padding: '4px 12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'inline-block', fontSize: '11px', fontWeight: '700', color: platform.status === 'Stable' ? 'var(--secondary)' : 'rgba(255,255,255,0.3)', marginBottom: '32px', textTransform: 'uppercase', letterSpacing: '1px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 {platform.status}
@@ -97,10 +96,10 @@ const Download = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-premium"
-                  style={{ width: '100%', textDecoration: 'none', background: 'linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%)' }}
+                  style={{ width: '100%', textDecoration: 'none', background: 'linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%)', cursor: 'pointer' }}
                 >
-                  Download Now
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17V3" /><path d="m6 11 6 6 6-6" /><path d="M19 21H5" /></svg>
+                  <DownloadIcon size={20} />
+                  Download
                 </a>
               ) : (
                 <button
@@ -108,7 +107,8 @@ const Download = () => {
                   className="btn-premium btn-secondary"
                   style={{ width: '100%', opacity: 0.5, cursor: 'not-allowed' }}
                 >
-                  Notify Me
+                  <Lock size={18} style={{ marginRight: '8px' }} />
+                  Coming Soon
                 </button>
               )}
             </motion.div>
@@ -116,8 +116,11 @@ const Download = () => {
         </div>
 
         {/* Patch Logs Section */}
-        <div className="glass-panel" style={{ marginTop: '100px', width: '100%', maxWidth: '1000px', padding: '64px' }}>
-          <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '48px', color: '#fff' }}>Complete <span className="gradient-text">Update Logs</span></h2>
+        <div className="glass-panel" style={{ marginTop: '100px', width: '100%', maxWidth: '1000px', padding: '64px', position: 'relative', zIndex: 20 }}>
+          <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '48px', color: '#fff' }}>
+            <Terminal size={24} style={{ marginRight: '16px', verticalAlign: 'middle' }} color="var(--secondary)"/>
+            Complete <span className="gradient-text">Update Logs</span>
+          </h2>
 
           <div style={{ borderLeft: '2px solid rgba(255,255,255,0.05)', paddingLeft: '32px', display: 'flex', flexDirection: 'column', gap: '48px' }}>
             {[
@@ -126,7 +129,7 @@ const Download = () => {
               { version: 'v1.3.0', date: 'March 02, 2026', notes: ['Centralized useNotifications hook logic.', 'Foreground alert banners and Android channel fixes.', 'Persistent socket listener singleton lock.'] }
             ].map((log, i) => (
               <div key={log.version} style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', left: '-37px', top: '8px', width: '8px', height: '8px', borderRadius: '50%', background: i === 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)', boxShadow: i === 0 ? '0 0 10px var(--primary)' : 'none' }}></div>
+                <div style={{ position: 'absolute', left: '-37.5px', top: '8px', width: '10px', height: '10px', borderRadius: '50%', background: i === 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)', boxShadow: i === 0 ? '0 0 15px var(--primary)' : 'none' }}></div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
                   <h4 style={{ fontSize: '20px', fontWeight: '800' }}>{log.version}</h4>
                   <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', fontWeight: '600' }}>RELEASED {log.date}</span>

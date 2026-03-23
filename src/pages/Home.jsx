@@ -1,172 +1,181 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import Layout from '../components/Layout';
-import heroImg from '../assets/hero-app.png';
+import { Zap, Brain, Globe, Download, Info, Users, Activity, Cpu } from 'lucide-react';
 
-// Requirement 12 & 13: GitHub Release link variable
 const DOWNLOAD_LINK = "https://github.com/Ash073/AniNex/releases/download/v1.5.0/aninex-v1.5.0.apk";
 
 const Home = () => {
-  const containerRef = useRef(null);
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start start", "end end"]
-  });
-
-  const heroY = useTransform(scrollYProgress, [0, 0.5], [0, -100]);
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0.5]);
-
   return (
     <Layout>
-      <div className="mesh-bg"></div>
-      <section ref={containerRef} style={{ padding: '0 10%', position: 'relative', minHeight: '130vh' }}>
+      <section style={{ 
+        padding: '0 10%', 
+        minHeight: '100vh', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        textAlign: 'center',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Glow Core */}
+        <motion.div 
+          animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
+          style={{ 
+            position: 'absolute', 
+            top: '50%', 
+            left: '50%', 
+            transform: 'translate(-50%, -50%)', 
+            width: '600px', 
+            height: '600px', 
+            background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)', 
+            opacity: 0.15, 
+            filter: 'blur(60px)',
+            zIndex: -1
+          }}
+        />
 
-        {/* Hero Section */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '100vh', gap: '80px', paddingTop: '80px' }}>
-          <motion.div
-            style={{ flex: '1.2' }}
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1] }}
+        {/* Floating Abstract Element */}
+        <motion.div 
+           initial={{ opacity: 0, y: 50 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ duration: 1.5, ease: [0.19, 1, 0.22, 1] }}
+           style={{ marginBottom: '40px' }}
+        >
+           <div style={{ 
+             width: '120px', 
+             height: '120px', 
+             borderRadius: '50%', 
+             border: '2px solid var(--primary)', 
+             display: 'flex', 
+             alignItems: 'center', 
+             justifyContent: 'center',
+             background: 'rgba(255, 255, 255, 0.03)',
+             backdropFilter: 'blur(10px)',
+             position: 'relative'
+           }}>
+              <motion.div 
+                 animate={{ rotate: 360 }}
+                 transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+                 style={{ 
+                   position: 'absolute', 
+                   top: '-5px', 
+                   left: '-5px', 
+                   right: '-5px', 
+                   bottom: '-5px', 
+                   borderRadius: '50%', 
+                   border: '2px solid transparent',
+                   borderTop: '2px solid var(--secondary)',
+                   borderBottom: '2px solid var(--accent)'
+                 }}
+              />
+              <img src="/adaptive-icon.png" alt="Logo" style={{ width: '80px', height: '80px', borderRadius: '50%' }} />
+           </div>
+        </motion.div>
+
+        <motion.h1 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1], delay: 0.2 }}
+          style={{ 
+            fontSize: '96px', 
+            lineHeight: '0.85', 
+            marginBottom: '32px', 
+            fontFamily: "'Syncopate', sans-serif", 
+            fontWeight: 'bold',
+            letterSpacing: '-5px' 
+          }}
+        >
+          CONNECTING <br/><span className="gradient-text">THE FUTURE</span> <br/>OF ANIME.
+        </motion.h1>
+        
+        <motion.p 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1.2, delay: 0.4 }}
+          style={{ 
+            fontSize: '22px', 
+            color: 'rgba(255, 255, 255, 0.5)', 
+            marginBottom: '64px', 
+            maxWidth: '800px', 
+            lineHeight: '1.6',
+            fontWeight: '400',
+            fontFamily: 'var(--font-sub)',
+            textTransform: 'uppercase',
+            letterSpacing: '2px'
+          }}
+        >
+          State-of-the-art communication infrastructure <br/>tailored specifically for the global anime FANDOM.
+        </motion.p>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1.2, delay: 0.6 }}
+          style={{ display: 'flex', gap: '32px', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}
+        >
+          <a 
+            href={DOWNLOAD_LINK}
+            className="btn-premium"
+            style={{ textDecoration: 'none', minWidth: '240px' }}
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            <div style={{ padding: '8px 16px', borderRadius: '40px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '32px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', display: 'block' }}></span>
-              <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: '600', letterSpacing: '0.5px' }}>NEXT GENERATION ANIME TECH</span>
-            </div>
-
-            <h1 style={{ fontSize: '84px', fontWeight: '900', lineHeight: '0.95', marginBottom: '32px', letterSpacing: '-2.5px', fontFamily: "'Outfit', sans-serif" }}>
-              Experience <br /><span className="gradient-text">Anime Connectivity</span> <br />Like Never Before.
-            </h1>
-
-            <p style={{ fontSize: '20px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '56px', lineHeight: '1.6', maxWidth: '580px', fontWeight: '400' }}>
-              AniNex is the ultimate mobile communication infrastructure for the global anime community. Seamless, stunning, and built for the future.
-            </p>
-
-            <div style={{ display: 'flex', gap: '24px' }}>
-              <a
-                href={DOWNLOAD_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-premium"
-                style={{ textDecoration: 'none' }}
-              >
-                Download APK
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17V3" /><path d="m6 11 6 6 6-6" /><path d="M19 21H5" /></svg>
-              </a>
-              <button
-                className="btn-premium btn-secondary"
-                style={{ background: 'transparent', padding: '16px 40px' }}
-              >
-                Explore Features
-              </button>
-            </div>
-
-            <div style={{ marginTop: '64px', display: 'flex', gap: '48px', alignItems: 'center' }}>
-              <div>
-                <h4 style={{ fontSize: '24px', fontWeight: '800', color: '#fff' }}>150K+</h4>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>ACTIVE FANS</p>
-              </div>
-              <div style={{ width: '1px', height: '40px', background: 'rgba(255,255,255,0.1)' }}></div>
-              <div>
-                <h4 style={{ fontSize: '24px', fontWeight: '800', color: '#fff' }}>v1.5.0</h4>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>LATEST STABLE</p>
-              </div>
-              <div style={{ width: '1px', height: '40px', background: 'rgba(255,255,255,0.1)' }}></div>
-              <div>
-                <h4 style={{ fontSize: '24px', fontWeight: '800', color: '#fff' }}>99.9%</h4>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>RELIABILITY</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            style={{ flex: '1', position: 'relative', y: heroY, opacity: heroOpacity }}
-            initial={{ opacity: 0, scale: 0.9, x: 50 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            transition={{ duration: 1.5, ease: [0.19, 1, 0.22, 1] }}
+            <Download size={20} />
+            GET ANDROID APK
+          </a>
+          <button 
+            className="btn-premium btn-secondary"
+            style={{ minWidth: '240px' }}
           >
-            <div className="animate-float" style={{ position: 'relative', zIndex: 10 }}>
-              <div style={{
-                borderRadius: '40px',
-                overflow: 'hidden',
-                boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 40px rgba(124, 58, 237, 0.2)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                padding: '16px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                backdropFilter: 'blur(10px)'
-              }}>
-                <div style={{ background: '#020617', borderRadius: '24px', overflow: 'hidden', position: 'relative' }}>
-                  <img
-                    src={heroImg}
-                    alt="AniNex Interface"
-                    style={{ width: '100%', height: '620px', objectFit: 'cover' }}
-                  />
-                  <div style={{ position: 'absolute', bottom: '0', left: '0', right: '0', height: '150px', background: 'linear-gradient(to top, #020617, transparent)', pointerEvents: 'none' }}></div>
-                </div>
-              </div>
-            </div>
-            {/* Glow spheres */}
-            <div style={{ position: 'absolute', top: '10%', right: '-10%', width: '300px', height: '300px', background: 'var(--primary)', filter: 'blur(140px)', opacity: '0.15', zIndex: -1 }}></div>
-            <div style={{ position: 'absolute', bottom: '10%', left: '-10%', width: '250px', height: '250px', background: 'var(--secondary)', filter: 'blur(120px)', opacity: '0.1', zIndex: -1 }}></div>
-          </motion.div>
-        </div>
+            <Info size={20} />
+            EXPLORE TECH
+          </button>
+        </motion.div>
+
+        {/* Quick Stats */}
+        <motion.div 
+           initial={{ opacity: 0 }}
+           animate={{ opacity: 1 }}
+           transition={{ duration: 2, delay: 1 }}
+           style={{ marginTop: '100px', display: 'flex', gap: '80px', flexWrap: 'wrap', justifyContent: 'center' }}
+        >
+           {[
+             { val: '150K+', label: 'Active Sessions', icon: <Users size={20} color="var(--primary)"/> },
+             { val: 'v1.5.0', label: 'Latest Build', icon: <Activity size={20} color="var(--secondary)"/> },
+             { val: '1ms', label: 'Latency', icon: <Cpu size={20} color="var(--accent)"/> }
+           ].map((stat) => (
+             <div key={stat.label} style={{ textAlign: 'center' }}>
+                <div style={{ marginBottom: '12px' }}>{stat.icon}</div>
+                <h4 style={{ fontSize: '32px', fontWeight: 'bold', color: '#fff', fontFamily: 'var(--font-sub)', letterSpacing: '2px' }}>{stat.val}</h4>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', fontWeight: 'bold' }}>{stat.label}</p>
+             </div>
+           ))}
+        </motion.div>
       </section>
 
-      {/* Floating Features Section */}
-      <section style={{ padding: '120px 10%', background: 'linear-gradient(to bottom, #020617, #01040f)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '100px' }}>
-          <h2 style={{ fontSize: '56px', fontWeight: '900', marginBottom: '24px', letterSpacing: '-1.5px' }}>Re-imagining <span className="cyan-gradient">Engagement</span>.</h2>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '18px', maxWidth: '600px', margin: '0 auto' }}>Every detail of AniNex is crafted to feel like a high-end anime OS, merging beauty with peak connectivity.</p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '40px' }}>
-          {[
-            {
-              title: 'Neon Synchrony',
-              desc: 'Real-time messaging with low-latency anime emoji engine and custom themes.',
-              icon: '⚡',
-              accent: 'var(--primary)'
-            },
-            {
-              title: 'Persona Match',
-              desc: 'Gemini 1.5 Pro analyzes your traits to find your anime counterpart with psychological precision.',
-              icon: '👁️',
-              accent: 'var(--accent)'
-            },
-            {
-              title: 'Global Fandom',
-              desc: 'Connect with specialized servers across hundreds of fandom categories securely.',
-              icon: '🌐',
-              accent: 'var(--secondary)'
-            }
-          ].map((feature, i) => (
-            <motion.div
-              key={i}
-              whileHover={{ y: -12, scale: 1.02 }}
-              className="glass-panel"
-              style={{ padding: '56px 40px' }}
-            >
-              <div style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '16px',
-                background: 'rgba(255,255,255,0.03)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '32px',
-                marginBottom: '32px',
-                border: '1px solid rgba(255,255,255,0.05)',
-                boxShadow: `0 0 20px ${feature.accent}15`
-              }}>
-                {feature.icon}
-              </div>
-              <h3 style={{ fontSize: '26px', fontWeight: '800', marginBottom: '16px', letterSpacing: '-0.5px' }}>{feature.title}</h3>
-              <p style={{ color: 'rgba(255,255,255,0.5)', lineHeight: '1.7', fontSize: '16px' }}>{feature.desc}</p>
-              <div style={{ marginTop: '24px', width: '32px', height: '2px', background: feature.accent }}></div>
-            </motion.div>
-          ))}
-        </div>
+      {/* Grid Display Section (Responsive) */}
+      <section style={{ padding: '120px 10%' }}>
+         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '40px' }} className="grid-3">
+            {[
+              { title: 'Neon Protocol', desc: 'Secure, low-latency communication layer built for speed.', icon: <Zap size={40} color="var(--primary)"/> },
+              { title: 'Persona Sync', desc: 'Find your fandom matched community with Gemini AI.', icon: <Brain size={40} color="var(--secondary)"/> },
+              { title: 'Global Grid', desc: 'Access anime-specific nodes across the cloud instantly.', icon: <Globe size={40} color="var(--accent)"/> }
+            ].map((feature, i) => (
+              <motion.div 
+                key={i}
+                whileHover={{ y: -10, background: 'rgba(255,255,255,0.05)' }}
+                className="glass-panel"
+                style={{ padding: '60px 40px', transition: 'all 0.3s ease' }}
+              >
+                <div style={{ marginBottom: '32px' }}>{feature.icon}</div>
+                <h3 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '16px', letterSpacing: '0.5px' }}>{feature.title}</h3>
+                <p style={{ color: 'rgba(255,255,255,0.4)', lineHeight: '1.7', fontSize: '15px', fontFamily: 'var(--font-sub)' }}>{feature.desc}</p>
+              </motion.div>
+            ))}
+         </div>
       </section>
     </Layout>
   );

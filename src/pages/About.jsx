@@ -1,58 +1,87 @@
 import React from 'react';
-import Layout from '../components/Layout';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import Layout from '../components/Layout';
+import { Rocket, Target, Cpu, Users } from 'lucide-react';
 
 const About = () => {
   return (
     <Layout>
-      <section style={{ padding: '80px 10%' }}>
-        <motion.h1 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          style={{ fontSize: '64px', fontWeight: '800', textAlign: 'center', marginBottom: '80px' }}
-        >
-          About <span className="gradient-text">AniNex</span>
-        </motion.h1>
+      <div className="mesh-bg"></div>
+      <section style={{ padding: '80px 10%', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', position: 'relative', zIndex: 10 }}>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '80px', maxWidth: '1200px', margin: '0 auto', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '24px' }}>Our <span className="gradient-text">Vision</span></h2>
-            <p style={{ color: '#94a3b8', fontSize: '18px', lineHeight: '1.8', marginBottom: '24px' }}>
-              AniNex was born from the desire to create a communication hub specifically tailored for the needs of anime fans.
-              Traditional communication tools were too generic; we wanted something that felt like it belonged in the same universe
-              as the shows we love.
-            </p>
-            <p style={{ color: '#94a3b8', fontSize: '18px', lineHeight: '1.8' }}>
-              We're building more than just an app; we're building the infrastructure that connects the next billion anime fans
-              with high-performance, low-latency communication tech and stunning anime-tech visuals.
-            </p>
-          </div>
-          
-          <div style={{ borderRadius: '40px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(255,255,255,0.03)', padding: '60px' }}>
-             <h2 style={{ fontSize: '24px', fontWeight: '700', color: 'white', marginBottom: '32px' }}>Anime-Tech Stack</h2>
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {[
-                  { label: 'Real-time Sync', val: '99.9%' },
-                  { label: 'Chat Latency', val: '<5ms' },
-                  { label: 'Community size', val: '150k+' },
-                  { label: 'Open Source', val: 'Yes' }
-                ].map((stat, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '15px' }}>
-                    <span style={{ color: '#64748b', fontSize: '16px' }}>{stat.label}</span>
-                    <span style={{ color: 'var(--secondary)', fontWeight: '700', fontSize: '16px' }}>{stat.val}</span>
-                  </div>
-                ))}
-             </div>
-          </div>
-        </div>
-      </section>
+        {/* Glow Core */}
+        <div style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translate(-50%, -50%)', width: '400px', height: '400px', background: 'var(--primary)', filter: 'blur(150px)', opacity: '0.1', zIndex: -1 }}></div>
 
-      <section style={{ padding: '100px 10%', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '48px', fontWeight: '800', marginBottom: '24px' }}>Ready to join the <br/><span className="gradient-text">Future?</span></h2>
-        <p style={{ color: '#94a3b8', fontSize: '20px', marginBottom: '40px' }}>Experience anime communication at its absolute peak.</p>
-        <button style={{ padding: '20px 60px', borderRadius: '40px', background: 'linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%)', color: 'white', fontWeight: '800', fontSize: '20px', boxShadow: '0 10px 40px rgba(124, 58, 237, 0.4)' }} className="neon-shadow">
-          Get Started Now
-        </button>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1.2 }}
+          style={{ textAlign: 'center', marginBottom: '100px' }}
+        >
+          <h1 style={{ fontSize: '72px', fontWeight: '900', marginBottom: '24px', letterSpacing: '-2px', fontFamily: "'Syncopate', sans-serif" }}>
+            The <span className="gradient-text">AniNex</span> Vision
+          </h1>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'var(--font-sub)', textTransform: 'uppercase', letterSpacing: '2px' }}>
+            Building the most advanced communication infrastructure specifically for the global anime FANDOM.
+          </p>
+        </motion.div>
+
+        {/* Vision Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '40px', width: '100%', maxWidth: '1200px' }} className="grid-3">
+          {[
+            { 
+              title: 'Our Mission', 
+              desc: 'To provide a seamless, low-latency communication layer that connects millions of anime fans through high-performance tech and stunning UI.', 
+              icon: <Target size={32} color="var(--primary)"/> 
+            },
+            { 
+              title: 'Tech First', 
+              desc: 'AniNex is built on modern protocols ensuring your messages, voice-rooms, and watch-parties are delivered at the speed of light.', 
+              icon: <Cpu size={32} color="var(--secondary)"/> 
+            }
+          ].map((card, i) => (
+            <motion.div 
+               key={i}
+               initial={{ opacity: 0, x: i === 0 ? -30 : 30 }}
+               animate={{ opacity: 1, x: 0 }}
+               className="glass-panel"
+               style={{ padding: '60px 48px' }}
+            >
+               <div style={{ marginBottom: '32px' }}>{card.icon}</div>
+               <h3 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '20px', letterSpacing: '1px', fontFamily: "'Syncopate', sans-serif" }}>{card.title}</h3>
+               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '16px', lineHeight: '1.8', fontFamily: 'var(--font-sub)' }}>{card.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Community Focus */}
+        <section style={{ marginTop: '120px', textAlign: 'center' }}>
+          <div style={{ padding: '80px', borderRadius: '40px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', maxWidth: '1000px', margin: '0 auto' }}>
+             <Users size={64} color="var(--accent)" style={{ marginBottom: '40px' }}/>
+             <h2 style={{ fontSize: '42px', fontWeight: '900', marginBottom: '32px', fontFamily: "'Syncopate', sans-serif" }}>Built by <span className="gradient-text">FANS</span> for <span className="gradient-text">FANS</span>.</h2>
+             <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '18px', lineHeight: '1.8', maxWidth: '700px', margin: '0 auto 64px', fontFamily: 'var(--font-sub)' }}>
+               Every pixel of AniNex is crafted with love for the community. We understand what it means to be a fan, so we build the tools we always wanted.
+             </p>
+             
+             {/* Requirement: Redirect to download screen */}
+             <Link 
+               to="/download" 
+               className="btn-premium"
+               style={{ 
+                 display: 'inline-flex', 
+                 textDecoration: 'none', 
+                 margin: '0 auto', 
+                 padding: '20px 60px', 
+                 fontSize: '16px', 
+                 boxShadow: '0 20px 40px rgba(124, 58, 237, 0.4)' 
+               }}
+             >
+               <Rocket size={20}/>
+               GET STARTED NOW
+             </Link>
+          </div>
+        </section>
       </section>
     </Layout>
   );

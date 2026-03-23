@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Rajdhani:wght@300;400;500;600;700&family=Outfit:wght@800;900&display=swap');
 
 :root {
   --primary: #7C3AED;
@@ -11,8 +11,9 @@
   --glass-bg: rgba(15, 23, 42, 0.4);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-shine: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 40%, transparent 60%, rgba(255, 255, 255, 0.05) 100%);
-  --font-heading: 'Outfit', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-heading: 'Syncopate', sans-serif;
+  --font-sub: 'Rajdhani', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
 }
 
 * {
@@ -31,6 +32,8 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
+  text-transform: uppercase;
+  letter-spacing: -2px;
 }
 
 /* Stunning Mesh Background */
@@ -102,14 +105,18 @@ h1, h2, h3, h4, h5, h6 {
   background: linear-gradient(135deg, var(--primary), #4c1d95);
   color: white;
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.5px;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   box-shadow: 0 8px 32px rgba(124, 58, 237, 0.3);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  cursor: pointer;
+  z-index: 1;
+  font-family: var(--font-sub);
 }
 
 .btn-premium:hover {
@@ -142,15 +149,29 @@ h1, h2, h3, h4, h5, h6 {
   animation: float 12s ease-in-out infinite;
 }
 
-.reveal-up {
-  opacity: 0;
-  transform: translateY(30px);
+@keyframes slow-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-.active .reveal-up {
-  opacity: 1;
-  transform: translateY(0);
-  transition: all 1s cubic-bezier(0.19, 1, 0.22, 1);
+.slow-rotate {
+  animation: slow-rotate 20s linear infinite;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 1024px) {
+  h1 { font-size: 56px !important; }
+  .grid-3 { grid-template-columns: 1fr 1fr !important; }
+}
+
+@media (max-width: 768px) {
+  h1 { font-size: 42px !important; letter-spacing: -1px !important; }
+  section { padding: 80px 5% !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .hero-flex { flex-direction: column !important; text-align: center !important; }
+  .hero-flex div { width: 100% !important; }
+  .navbar-desktop { display: none !important; }
+  .navbar-mobile-toggle { display: block !important; }
 }
 
 /* Custom Scrollbar */
