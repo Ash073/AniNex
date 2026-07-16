@@ -18,10 +18,33 @@ if (!admin.apps.length) {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
   if (privateKey) {
-    // Strip leading/trailing quotes if user copied them from JSON
-    privateKey = privateKey.replace(/^"|"$/g, '');
-    // Replace escaped literal \n with actual newlines
+    // 1. If the user accidentally pasted the ENTIRE JSON file, extract just the private_key
+    if (privateKey.trim().startsWith('{') && privateKey.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(privateKey);
+        if (parsed.private_key) {
+          privateKey = parsed.private_key;
+        }
+      } catch (e) {
+        console.warn('[Firebase] FIREBASE_PRIVATE_KEY looks like JSON but failed to parse');
+      }
+    }
+
+    // 2. Strip leading/trailing quotes (single or double)
+    privateKey = privateKey.replace(/^['"]|['"]$/g, '');
+
+    // 3. Replace escaped literal \n with actual newlines
     privateKey = privateKey.replace(/\\n/g, '\n');
+
+    // 4. If Render squashed the newlines into spaces (common copy-paste issue)
+    if (!privateKey.includes('\n') && privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      privateKey = privateKey.replace(/-----BEGIN PRIVATE KEY-----\s*/g, '-----BEGIN PRIVATE KEY-----\n');
+      privateKey = privateKey.replace(/\s*-----END PRIVATE KEY-----/g, '\n-----END PRIVATE KEY-----');
+      // Replace all spaces in the base64 part with newlines
+      privateKey = privateKey.replace(/(-----\n)(.+)(\n-----)/, (match, p1, p2, p3) => {
+        return p1 + p2.replace(/ /g, '\n') + p3;
+      });
+    }
   }
 
   if (projectId && clientEmail && privateKey) {
