@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "659606924923",
+    "project_id": "aninex-a8eb3",
+    "storage_bucket": "aninex-a8eb3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659606924923:android:aa5ee0095848227e18bcde",
+        "android_client_info": {
+          "package_name": "com.aninex.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-3ay0COhkxH9S6lGOlGFF7kt_il7dSos"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

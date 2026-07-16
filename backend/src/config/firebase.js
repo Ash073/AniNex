@@ -16,7 +16,13 @@ const admin = require('firebase-admin');
 if (!admin.apps.length) {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  if (privateKey) {
+    // Strip leading/trailing quotes if user copied them from JSON
+    privateKey = privateKey.replace(/^"|"$/g, '');
+    // Replace escaped literal \n with actual newlines
+    privateKey = privateKey.replace(/\\n/g, '\n');
+  }
 
   if (projectId && clientEmail && privateKey) {
     admin.initializeApp({
