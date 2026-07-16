@@ -1,0 +1,3 @@
+[submodule "ani-nex-web"]
+	path = ani-nex-web
+	url = https://github.com/Ash073/AniNex

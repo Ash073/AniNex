@@ -1,0 +1,90 @@
+{
+  "expo": {
+    "name": "AniNeX",
+    "slug": "aninex",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo/AniNex (1).png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "aninex",
+    "splash": {
+      "image": "./assets/logo/AniNex (1).png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fbb8db22-e484-4526-add1-fe80a4fbcdb5"
+    },
+    "ios": {
+      "bundleIdentifier": "com.aninex.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow AniNeX to access your camera.",
+        "NSPhotoLibraryUsageDescription": "Allow AniNeX to access your photos.",
+        "NSUserTrackingUsageDescription": "Used for improving user experience."
+      }
+    },
+    "android": {
+      "package": "com.aninex.app",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo/AniNex (1).png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "usesFeature": [
+        {
+          "name": "android.hardware.camera",
+          "required": false
+        },
+        {
+          "name": "android.hardware.camera.ar",
+          "required": false
+        },
+        {
+          "name": "android.hardware.camera.ar",
+          "required": false
+        }
+      ],
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/logo/AniNex (1).png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-web-browser",
+      "expo-font",
+      "expo-image-picker",
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/messaging",
+        {
+          "androidNotificationIcon": "./assets/icon.png",
+          "androidNotificationColor": "#6366f1"
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "expoPublicApiUrl": "https://aninex-1.onrender.com",
+      "router": {},
+      "eas": {
+        "projectId": "fbb8db22-e484-4526-add1-fe80a4fbcdb5"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}
