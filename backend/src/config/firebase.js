@@ -14,6 +14,21 @@
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
+  // BEST METHOD FOR RENDER: Base64 Encoded JSON
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    try {
+      const buffer = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64');
+      const serviceAccount = JSON.parse(buffer.toString('utf-8'));
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('[Firebase] Admin SDK initialized with FIREBASE_SERVICE_ACCOUNT_BASE64');
+      return module.exports = admin;
+    } catch (e) {
+      console.error('[Firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64:', e.message);
+    }
+  }
+
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
@@ -59,7 +74,7 @@ if (!admin.apps.length) {
     console.log('[Firebase] Admin SDK initialized with GOOGLE_APPLICATION_CREDENTIALS');
   } else {
     console.error(
-      '[Firebase] Missing credentials. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY env vars.',
+      '[Firebase] Missing credentials. Set FIREBASE_SERVICE_ACCOUNT_BASE64 env var.',
     );
   }
 }
