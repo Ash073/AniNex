@@ -49,13 +49,19 @@ export default function OAuthCallbackScreen() {
         const user = normalizeUser(JSON.parse(decodeURIComponent(userRaw)));
         setUser(user);
         await setTokens(token, refreshToken);
-        router.replace(user.onboardingCompleted ? '/home' : '/onboarding');
+        
+        // Defer navigation to allow root layout to mount
+        setTimeout(() => {
+          router.replace(user.onboardingCompleted ? '/home' : '/onboarding');
+        }, 100);
       } catch (error: any) {
         console.error('OAuth callback error:', error);
         if (Platform.OS === 'web') {
           window.alert('Sign-in failed. Please try again.');
         }
-        router.replace('/welcome');
+        setTimeout(() => {
+          router.replace('/welcome');
+        }, 100);
       }
     })();
   }, []);

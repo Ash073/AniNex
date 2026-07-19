@@ -127,6 +127,9 @@ export const useNotifications = () => {
 
   useEffect(() => {
     if (!user?.id) return;
+    
+    // Prevent FCM logic from running on web (throws missing app error)
+    if (Platform.OS === 'web') return;
 
     const unsubscribers: (() => void)[] = [];
 
