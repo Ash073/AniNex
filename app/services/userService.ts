@@ -1,4 +1,7 @@
 import api from './api';
+import { withOfflineCache } from '@/utils/withOfflineCache';
+import { withOfflineMutation } from '@/utils/offlineMutation';
+import { STORES } from '@/web/offline/db';
 
 interface ProfileUpdateData {
   username?: string;
@@ -25,21 +28,26 @@ interface UserResponse {
 
 export const userService = {
   async updateProfile(data: ProfileUpdateData): Promise<any> {
-    try {
-      const response = await api.put('/users/profile', data);
-      return response.data.data.user;
-    } catch (error: any) {
-      throw error;
-    }
+    return withOfflineMutation(
+      'updateProfile',
+      data,
+      async () => {
+        const response = await api.put('/users/profile', data);
+        return response.data.data.user;
+      },
+      { ...data }
+    );
   },
 
   async getUserById(userId: string): Promise<any> {
-    try {
-      const response = await api.get(`/users/${userId}`);
-      return response.data;
-    } catch (error: any) {
-      throw error;
-    }
+    return withOfflineCache(
+      STORES.USER_PROFILE,
+      userId,
+      async () => {
+        const response = await api.get(`/users/${userId}`);
+        return response.data;
+      }
+    );
   },
 
   async addFriend(userId: string): Promise<any> {

@@ -72,6 +72,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Visual Health Dashboard
+app.use('/health-dashboard', require('./src/routes/healthDashboard'));
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

@@ -1,5 +1,8 @@
 import api from './api';
 import { Post, Comment } from '@/types';
+import { withOfflineCache } from '@/utils/withOfflineCache';
+import { withOfflineMutation } from '@/utils/offlineMutation';
+import { STORES } from '@/web/offline/db';
 
 export const postService = {
   getPosts: async (params?: {
@@ -14,10 +17,17 @@ export const postService = {
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.skip) queryParams.append('skip', params.skip.toString());
 
-    const { data } = await api.get<{ success: boolean; data: { posts: Post[] } }>(
-      `/posts?${queryParams}`
+    return withOfflineCache(
+      STORES.ANIME_LIST, // Mapping generic feed to ANIME_LIST for offline requirements
+      `posts_${queryParams.toString()}`,
+      async () => {
+        const { data } = await api.get<{ success: boolean; data: { posts: Post[] } }>(
+          `/posts?${queryParams}`
+        );
+        return data.data.posts;
+      },
+      true
     );
-    return data.data.posts;
   },
 
   createPost: async (postData: {
@@ -32,52 +42,80 @@ export const postService = {
     commentsEnabled?: boolean;
     mentions?: string[];
   }) => {
-    const { data } = await api.post<{ success: boolean; data: { post: Post } }>('/posts', postData);
+    return withOfflineMutation(
+      'createPost',
+      postData,
+      async () => {
+        const { data } = await api.post<{ success: boolean; data: { post: Post } }>('/posts', postData);
 
-    // Reward XP for posting (+5 XP)
-    try {
-      const { useAuthStore } = await import('@/store/authStore');
-      const { user, updateUser } = useAuthStore.getState();
-      if (user) {
-        updateUser({ xp: (user.xp || 0) + 5 });
-      }
-    } catch (err) {
-      console.warn('Failed to update local XP after post:', err);
-    }
+        // Reward XP for posting (+5 XP)
+        try {
+          const { useAuthStore } = await import('@/store/authStore');
+          const { user, updateUser } = useAuthStore.getState();
+          if (user) {
+            updateUser({ xp: (user.xp || 0) + 5 });
+          }
+        } catch (err) {
+          console.warn('Failed to update local XP after post:', err);
+        }
 
-    return data.data.post;
+        return data.data.post;
+      },
+      { ...postData, _id: Date.now().toString(), author: {}, createdAt: new Date().toISOString() } as any
+    );
   },
 
   likePost: async (postId: string) => {
-    const { data } = await api.post(`/posts/${postId}/like`);
-    return data;
+    return withOfflineMutation(
+      'likePost',
+      { postId },
+      async () => {
+        const { data } = await api.post(`/posts/${postId}/like`);
+        return data;
+      },
+      { success: true }
+    );
   },
 
   getComments: async (postId: string) => {
-    const { data } = await api.get<{ success: boolean; data: { comments: Comment[] } }>(
-      `/posts/${postId}/comments`
+    return withOfflineCache(
+      STORES.ANIME_LIST,
+      `comments_${postId}`,
+      async () => {
+        const { data } = await api.get<{ success: boolean; data: { comments: Comment[] } }>(
+          `/posts/${postId}/comments`
+        );
+        return data.data.comments;
+      },
+      true
     );
-    return data.data.comments;
   },
 
   addComment: async (postId: string, content: string, parentCommentId?: string) => {
-    const { data } = await api.post<{ success: boolean; data: { comment: Comment } }>(
-      `/posts/${postId}/comments`,
-      { content, parentCommentId }
+    return withOfflineMutation(
+      'addComment',
+      { postId, content, parentCommentId },
+      async () => {
+        const { data } = await api.post<{ success: boolean; data: { comment: Comment } }>(
+          `/posts/${postId}/comments`,
+          { content, parentCommentId }
+        );
+
+        // Reward XP for commenting (+3 XP)
+        try {
+          const { useAuthStore } = await import('@/store/authStore');
+          const { user, updateUser } = useAuthStore.getState();
+          if (user) {
+            updateUser({ xp: (user.xp || 0) + 3 });
+          }
+        } catch (err) {
+          console.warn('Failed to update local XP after comment:', err);
+        }
+
+        return data.data.comment;
+      },
+      { _id: Date.now().toString(), content, postId, createdAt: new Date().toISOString() } as any
     );
-
-    // Reward XP for commenting (+3 XP)
-    try {
-      const { useAuthStore } = await import('@/store/authStore');
-      const { user, updateUser } = useAuthStore.getState();
-      if (user) {
-        updateUser({ xp: (user.xp || 0) + 3 });
-      }
-    } catch (err) {
-      console.warn('Failed to update local XP after comment:', err);
-    }
-
-    return data.data.comment;
   },
 
   getPost: async (postId: string) => {

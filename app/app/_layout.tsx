@@ -1,3 +1,4 @@
+import '../global.css';
 import { useEffect } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,6 +8,8 @@ import { NotificationProvider } from '@/components/NotificationProvider';
 import Loader from '@/components/Loader';
 import { UpdateChecker } from '@/components/UpdateChecker';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { syncManager } from '@/utils/syncManager';
 
 import {
   useFonts,
@@ -23,13 +26,19 @@ SplashScreen.preventAutoHideAsync();
 
 function NotificationSetup() {
   useNotifications();
+  useOnlineStatus();
+  
+  useEffect(() => {
+    syncManager.setupListeners();
+  }, []);
+  
   return null;
 }
 
 export default function RootLayout() {
   const { loadAuth, isLoading: isAuthLoading } = useAuthStore();
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Oswald_400Regular,
     Oswald_500Medium,
     Oswald_600SemiBold,
@@ -37,14 +46,13 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
-      loadAuth().finally(() => {
-        SplashScreen.hideAsync();
-      });
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+      loadAuth();
     }
-  }, [loadAuth, fontsLoaded]);
+  }, [loadAuth, fontsLoaded, fontError]);
 
-  if (!fontsLoaded || isAuthLoading) {
+  if ((!fontsLoaded && !fontError) || isAuthLoading) {
     return <Loader />;
   }
 

@@ -1,31 +1,26 @@
-import { Redirect } from 'expo-router';
+import { useEffect } from 'react';
+import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import Loader from '@/components/Loader';
-import { useAnimatedStyle } from 'react-native-reanimated';
 
-// Preview of the implementation logic
 export default function Index() {
   const { isAuthenticated, isLoading, user } = useAuthStore();
 
-  // Still loading tokens / user from storage
-  if (isLoading) {
-    return <Loader />;
-  }
+  useEffect(() => {
+    if (isLoading) return;
 
-  // Fully authenticated and set-up → go to home
-  if (isAuthenticated && user?.onboardingCompleted && user?.profileCompleted) {
-    return <Redirect href="/home" />;
-  }
+    if (isAuthenticated && user?.onboardingCompleted && user?.profileCompleted) {
+      router.replace('/home');
+    } else if (isAuthenticated && user?.onboardingCompleted && !user?.profileCompleted) {
+      router.replace('/profile-setup');
+    } else if (isAuthenticated && !user?.onboardingCompleted) {
+      router.replace('/onboarding');
+    } else {
+      // Not authenticated → landing / welcome page
+      router.replace('/welcome');
+    }
+  }, [isAuthenticated, isLoading, user]);
 
-  // Authenticated but onboarding/profile incomplete
-  if (isAuthenticated && user?.onboardingCompleted && !user?.profileCompleted) {
-    return <Redirect href="/profile-setup" />;
-  }
-
-  if (isAuthenticated && !user?.onboardingCompleted) {
-    return <Redirect href="/onboarding" />;
-  }
-
-  // Not authenticated → landing / welcome page
-  return <Redirect href="/welcome" />;
+  // Return loader while the redirect effect is processing
+  return <Loader />;
 }

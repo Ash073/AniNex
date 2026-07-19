@@ -1,13 +1,23 @@
 import api from './api';
 import { Conversation, DirectMessage } from '@/types';
+import { withOfflineCache } from '@/utils/withOfflineCache';
+import { withOfflineMutation } from '@/utils/offlineMutation';
+import { STORES } from '@/web/offline/db';
 
 export const dmService = {
   /** Get all conversations for the logged-in user */
   getConversations: async (): Promise<Conversation[]> => {
-    const { data } = await api.get<{ success: boolean; data: Conversation[] }>(
-      '/dm/conversations'
+    return withOfflineCache(
+      STORES.CHAT_HISTORY,
+      'conversations',
+      async () => {
+        const { data } = await api.get<{ success: boolean; data: Conversation[] }>(
+          '/dm/conversations'
+        );
+        return data.data;
+      },
+      true
     );
-    return data.data;
   },
 
   /** Start or retrieve a conversation with a specific user */
@@ -28,11 +38,18 @@ export const dmService = {
     const params = new URLSearchParams({ limit: limit.toString() });
     if (before) params.append('before', before);
 
-    const { data } = await api.get<{
-      success: boolean;
-      data: { messages: DirectMessage[] };
-    }>(`/dm/messages/${conversationId}?${params}`);
-    return data.data.messages;
+    return withOfflineCache(
+      STORES.CHAT_HISTORY,
+      `messages_${conversationId}_${params.toString()}`,
+      async () => {
+        const { data } = await api.get<{
+          success: boolean;
+          data: { messages: DirectMessage[] };
+        }>(`/dm/messages/${conversationId}?${params}`);
+        return data.data.messages;
+      },
+      true
+    );
   },
 
   /** Send a direct message (text and/or image) */
@@ -42,11 +59,18 @@ export const dmService = {
     image_url?: string,
     repliedToId?: string,
   ): Promise<DirectMessage> => {
-    const { data } = await api.post<{
-      success: boolean;
-      data: { message: DirectMessage };
-    }>('/dm/messages', { conversationId, content, image_url, repliedToId });
-    return data.data.message;
+    return withOfflineMutation(
+      'sendDM',
+      { conversationId, content, image_url, repliedToId },
+      async () => {
+        const { data } = await api.post<{
+          success: boolean;
+          data: { message: DirectMessage };
+        }>('/dm/messages', { conversationId, content, image_url, repliedToId });
+        return data.data.message;
+      },
+      { _id: Date.now().toString(), conversationId, content, image_url, repliedToId, createdAt: new Date().toISOString() } as any
+    );
   },
 
   /** Edit a direct message */

@@ -1,6 +1,8 @@
 import { io, Socket } from 'socket.io-client';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { useNetworkStore } from '@/store/networkStore';
+import { writeToStore, STORES } from '@/web/offline/db';
 import { SOCKET_URL } from '@/constants/api';
 import { Message } from '@/types';
 
@@ -96,13 +98,22 @@ class SocketService {
   }
 
   // Message operations
-  sendMessage(channelId: string, content: string, image_url?: string, repliedToId?: string) {
+  async sendMessage(channelId: string, content: string, image_url?: string, repliedToId?: string) {
     const msg = { channelId, content, image_url, repliedToId };
-    if (this.socket && this.isConnected) {
+    const isOffline = Platform.OS === 'web' && useNetworkStore.getState().isOffline;
+    
+    if (this.socket && this.isConnected && !isOffline) {
       this.socket.emit('message:send', msg);
     } else {
       // Queue the message for retry
       this.messageQueue.push(msg);
+      if (Platform.OS === 'web') {
+        await writeToStore(STORES.MUTATION_QUEUE, {
+          action: 'socket_message',
+          payload: msg,
+          timestamp: Date.now()
+        });
+      }
     }
   }
 
@@ -138,9 +149,20 @@ class SocketService {
     }
   }
 
-  sendDM(conversationId: string, content: string, image_url?: string, repliedToId?: string) {
-    if (this.socket && this.isConnected) {
-      this.socket.emit('dm:send', { conversationId, content, image_url, repliedToId });
+  async sendDM(conversationId: string, content: string, image_url?: string, repliedToId?: string) {
+    const msg = { conversationId, content, image_url, repliedToId };
+    const isOffline = Platform.OS === 'web' && useNetworkStore.getState().isOffline;
+    
+    if (this.socket && this.isConnected && !isOffline) {
+      this.socket.emit('dm:send', msg);
+    } else {
+      if (Platform.OS === 'web') {
+        await writeToStore(STORES.MUTATION_QUEUE, {
+          action: 'socket_message',
+          payload: msg,
+          timestamp: Date.now()
+        });
+      }
     }
   }
 
