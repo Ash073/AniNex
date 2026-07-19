@@ -124,20 +124,29 @@ const sendAuthResult = (res, user, platform, mobileRedirectUri) => {
 };
 
 /** Send a styled error page (for callback failures) */
-const sendAuthError = (res, message) => {
-  res.setHeader('Content-Type', 'text/html');
-  res.status(400).send(`<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"/><title>Auth Error</title>
-<script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.8.11/dist/dotlottie-wc.js" type="module"></script>
-<style>body{background:#0f0f1e;color:#fff;display:flex;justify-content:center;
-       align-items:center;height:100vh;margin:0;font-family:sans-serif;text-align:center}
-       a{color:#6366f1}p{margin:8px 0}</style></head>
-<body><div>
-  <dotlottie-wc src="https://lottie.host/a40c9783-8abd-4d5e-85d5-03e2b9c0f79d/aQIw6mPBAV.lottie" style="width:200px;height:200px" autoplay loop></dotlottie-wc>
-  <p>${message}</p><p><a href="javascript:window.close()">Close this window</a></p>
-</div></body>
-</html>`);
+const sendAuthError = (req, res, message) => {
+  let platform = 'web';
+  let mobileRedirectUri = '';
+  
+  try {
+    const rawState = req.query?.state;
+    if (rawState) {
+      const parsed = JSON.parse(Buffer.from(rawState, 'base64url').toString());
+      platform = parsed.platform || 'web';
+      if (parsed.mobileRedirectUri) mobileRedirectUri = parsed.mobileRedirectUri;
+    }
+  } catch {}
+
+  const encodedError = encodeURIComponent(message);
+
+  if (platform === 'mobile') {
+    const baseUri = mobileRedirectUri || 'animex://oauth';
+    const separator = baseUri.includes('?') ? '&' : '?';
+    return res.redirect(`${baseUri}${separator}error=${encodedError}`);
+  }
+
+  // Web
+  return res.redirect(`${CLIENT_URL}/login?error=${encodedError}`);
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -181,7 +190,7 @@ router.get('/google/callback', async (req, res) => {
 
     if (oauthError) {
       console.error('Google OAuth error:', oauthError);
-      return sendAuthError(res, 'Google sign-in was cancelled or failed.');
+      return sendAuthError(req, res, 'Google sign-in was cancelled or failed.');
     }
 
     let platform = 'web';
@@ -194,7 +203,7 @@ router.get('/google/callback', async (req, res) => {
       if (parsed.mobileRedirectUri) mobileRedirectUri = parsed.mobileRedirectUri;
     } catch {}
 
-    if (!code) return sendAuthError(res, 'Authorization code missing.');
+    if (!code) return sendAuthError(req, res, 'Authorization code missing.');
 
     // Exchange authorization code for tokens
     const redirectUri = `${backendUrl}/api/auth/oauth/google/callback`;
@@ -214,7 +223,7 @@ router.get('/google/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error('Google token exchange failed:', errBody);
-      return sendAuthError(res, 'Failed to exchange Google code for token.');
+      return sendAuthError(req, res, 'Failed to exchange Google code for token.');
     }
 
     const tokenData = await tokenRes.json();
@@ -228,7 +237,7 @@ router.get('/google/callback', async (req, res) => {
     const googleUser = await userInfoRes.json();
 
     if (!googleUser?.email) {
-      return sendAuthError(res, 'Could not get email from Google.');
+      return sendAuthError(req, res, 'Could not get email from Google.');
     }
 
     const user = await findOrCreateUser({
@@ -240,7 +249,7 @@ router.get('/google/callback', async (req, res) => {
     sendAuthResult(res, user, platform, mobileRedirectUri);
   } catch (err) {
     console.error('Google OAuth callback error:', err);
-    sendAuthError(res, 'Authentication failed. Please try again.');
+    sendAuthError(req, res, 'Authentication failed. Please try again.');
   }
 });
 
@@ -286,7 +295,7 @@ router.get('/discord/callback', async (req, res) => {
 
     if (oauthError) {
       console.error('Discord OAuth error:', oauthError);
-      return sendAuthError(res, 'Discord sign-in was cancelled or failed.');
+      return sendAuthError(req, res, 'Discord sign-in was cancelled or failed.');
     }
 
     let platform = 'web';
@@ -299,7 +308,7 @@ router.get('/discord/callback', async (req, res) => {
       if (parsed.mobileRedirectUri) mobileRedirectUri = parsed.mobileRedirectUri;
     } catch {}
 
-    if (!code) return sendAuthError(res, 'Authorization code missing.');
+    if (!code) return sendAuthError(req, res, 'Authorization code missing.');
 
     // Exchange authorization code for tokens
     const redirectUri = `${backendUrl}/api/auth/oauth/discord/callback`;
@@ -319,7 +328,7 @@ router.get('/discord/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error('Discord token exchange failed:', errBody);
-      return sendAuthError(res, 'Failed to exchange Discord code for token.');
+      return sendAuthError(req, res, 'Failed to exchange Discord code for token.');
     }
 
     const tokenData = await tokenRes.json();
@@ -333,7 +342,7 @@ router.get('/discord/callback', async (req, res) => {
     const discordUser = await userInfoRes.json();
 
     if (!discordUser?.email) {
-      return sendAuthError(res, 'Could not get email from Discord. Make sure email permission is granted.');
+      return sendAuthError(req, res, 'Could not get email from Discord. Make sure email permission is granted.');
     }
 
     const user = await findOrCreateUser({
@@ -345,7 +354,7 @@ router.get('/discord/callback', async (req, res) => {
     sendAuthResult(res, user, platform, mobileRedirectUri);
   } catch (err) {
     console.error('Discord OAuth callback error:', err);
-    sendAuthError(res, 'Authentication failed. Please try again.');
+    sendAuthError(req, res, 'Authentication failed. Please try again.');
   }
 });
 
@@ -382,7 +391,7 @@ router.get('/facebook/callback', async (req, res) => {
 
     if (error_description) {
       console.error('Facebook OAuth error:', error_description);
-      return sendAuthError(res, 'Facebook sign-in was cancelled or failed.');
+      return sendAuthError(req, res, 'Facebook sign-in was cancelled or failed.');
     }
 
     let platform = 'web';
@@ -395,7 +404,7 @@ router.get('/facebook/callback', async (req, res) => {
       if (parsed.mobileRedirectUri) mobileRedirectUri = parsed.mobileRedirectUri;
     } catch {}
 
-    if (!code) return sendAuthError(res, 'Authorization code missing.');
+    if (!code) return sendAuthError(req, res, 'Authorization code missing.');
 
     const redirectUri = `${backendUrl}/api/auth/oauth/facebook/callback`;
     console.log('[OAuth] Facebook token exchange redirect_uri:', redirectUri);
@@ -412,7 +421,7 @@ router.get('/facebook/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error('Facebook token exchange failed:', errBody);
-      return sendAuthError(res, 'Failed to exchange Facebook code for token.');
+      return sendAuthError(req, res, 'Failed to exchange Facebook code for token.');
     }
 
     const tokenData = await tokenRes.json();
@@ -426,7 +435,7 @@ router.get('/facebook/callback', async (req, res) => {
     const fbUser = await userInfoRes.json();
 
     if (!fbUser?.email) {
-      return sendAuthError(res, 'Could not get email from Facebook. Make sure email permission is granted.');
+      return sendAuthError(req, res, 'Could not get email from Facebook. Make sure email permission is granted.');
     }
 
     const user = await findOrCreateUser({
@@ -438,7 +447,7 @@ router.get('/facebook/callback', async (req, res) => {
     sendAuthResult(res, user, platform, mobileRedirectUri);
   } catch (err) {
     console.error('Facebook OAuth callback error:', err);
-    sendAuthError(res, 'Authentication failed. Please try again.');
+    sendAuthError(req, res, 'Authentication failed. Please try again.');
   }
 });
 
