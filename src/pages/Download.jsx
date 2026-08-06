@@ -3,7 +3,7 @@ import Layout from '../components/Layout';
 import { motion } from 'framer-motion';
 import { Smartphone, Monitor, Globe, Download as DownloadIcon, Lock, Terminal, Box } from 'lucide-react';
 
-const DOWNLOAD_LINK = "https://github.com/Ash073/AniNex/releases/download/v1.5.0/aninex-v1.5.0.apk";
+const DOWNLOAD_LINK = "https://github.com/Ash073/AniNex/releases/download/v1.5.1/AniNex.apk";
 
 const Download = () => {
   const platforms = [
@@ -12,7 +12,7 @@ const Download = () => {
       version: 'v1.5.0',
       date: 'March 2026',
       size: '112 MB',
-      icon: <Smartphone size={48} color="var(--primary)"/>,
+      icon: <Smartphone size={48} color="var(--primary)" />,
       link: DOWNLOAD_LINK,
       status: 'Stable'
     },
@@ -21,7 +21,7 @@ const Download = () => {
       version: 'v1.2.0',
       date: 'TBA',
       size: 'Coming soon',
-      icon: <Monitor size={48} color="var(--secondary)"/>,
+      icon: <Monitor size={48} color="var(--secondary)" />,
       link: '#',
       status: 'Development'
     },
@@ -30,7 +30,7 @@ const Download = () => {
       version: 'Beta',
       date: 'TBA',
       size: 'Cloud',
-      icon: <Globe size={48} color="var(--accent)"/>,
+      icon: <Globe size={48} color="var(--accent)" />,
       link: '#',
       status: 'Waitlist'
     }
@@ -118,15 +118,15 @@ const Download = () => {
         {/* Patch Logs Section */}
         <div className="glass-panel" style={{ marginTop: '100px', width: '100%', maxWidth: '1000px', padding: '64px', position: 'relative', zIndex: 20 }}>
           <h2 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '48px', color: '#fff' }}>
-            <Terminal size={24} style={{ marginRight: '16px', verticalAlign: 'middle' }} color="var(--secondary)"/>
+            <Terminal size={24} style={{ marginRight: '16px', verticalAlign: 'middle' }} color="var(--secondary)" />
             Complete <span className="gradient-text">Update Logs</span>
           </h2>
 
           <div style={{ borderLeft: '2px solid rgba(255,255,255,0.05)', paddingLeft: '32px', display: 'flex', flexDirection: 'column', gap: '48px' }}>
             {[
+              { version: 'v1.1.0 (Fix 1)', date: 'April 2026', notes: ['Enabled Over-the-Air (OTA) direct updates.', 'Fixed notification navigation for DMs and Servers.', 'Enhanced session security and token registration.', 'Consolidated build pipeline and stability fixes.'] },
               { version: 'v1.5.0', date: 'March 04, 2026', notes: ['Critical Push Fix: Single message payload array fix.', 'FCM integration with google-services.json for Android.', 'Gemini 1.5 Pro Personality engine upgrade.'] },
               { version: 'v1.4.0', date: 'March 04, 2026', notes: ['Replaced OpenAI gpt-4o-mini with Gemini 1.5 Pro.', '10-dimension psychological reasoning match system.', 'Multi-device push notification table support.'] },
-              { version: 'v1.3.0', date: 'March 02, 2026', notes: ['Centralized useNotifications hook logic.', 'Foreground alert banners and Android channel fixes.', 'Persistent socket listener singleton lock.'] }
             ].map((log, i) => (
               <div key={log.version} style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', left: '-37.5px', top: '8px', width: '10px', height: '10px', borderRadius: '50%', background: i === 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)', boxShadow: i === 0 ? '0 0 15px var(--primary)' : 'none' }}></div>
